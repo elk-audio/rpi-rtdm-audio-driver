@@ -77,7 +77,7 @@ static struct i2c_board_info i2c_pcm3168a_board_info[] =  {
 	}
 };
 
-int config_clk_gen(struct i2c_client* i2c_client_dev) {
+static int config_clk_gen(struct i2c_client* i2c_client_dev) {
 	char cmd[2];
 	int i, ret = 0;
 	printk("i2c_init: i2c_client_dev for clkgen: %p \n", i2c_client_dev);
@@ -120,11 +120,88 @@ int config_clk_gen(struct i2c_client* i2c_client_dev) {
 	return 0;
 }
 
-int config_codec(struct i2c_client* i2c_client_dev) {
+static int config_codec(struct i2c_client* i2c_client_dev) {
 	char cmd[2];
-	int i, ret = 0;
+	int ret;
 	printk("i2c_init: i2c_client_dev for codec: %p \n", i2c_client_dev);
-
+	cmd[0] = PCM_DAC_CNTRL_TWO_REG;
+	cmd[1] = 0x00 | DAC_CHAN_0_1_DISABLED_MODE_MASK |
+			DAC_CHAN_2_3_DISABLED_MODE_MASK |
+			DAC_CHAN_4_5_DISABLED_MODE_MASK |
+			DAC_CHAN_6_7_DISABLED_MODE_MASK;
+	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+		printk("config_codec: i2c_master_send failed to send cmd  to PCM_DAC_CNTRL_TWO_REG\n");
+		return ret;
+	}
+	msleep(10);
+	cmd[0] = PCM_ADC_CNTRL_TWO_REG;
+	cmd[1] = 0x00 | ADC_CHAN_0_1_POWER_SAVE_ENABLE_MASK |
+			ADC_CHAN_2_3_POWER_SAVE_ENABLE_MASK |
+			ADC_CHAN_4_5_POWER_SAVE_ENABLE_MASK;
+	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CNTRL_TWO_REG\n");
+		return ret;
+	}
+	msleep(10);
+	cmd[0] = PCM_DAC_CNTRL_ONE_REG;
+	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK |
+			DAC_I2S_24_BIT_MODE_MASK;
+	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+		printk("config_codec: i2c_master_send failed to send cmd to PCM_DAC_CNTRL_ONE_REG\n");
+		return ret;
+	}
+	msleep(10);
+	cmd[0] = PCM_DAC_CNTRL_THREE_REG;
+	cmd[1] = 0x00 | DAC_MASTER_VOLUME_CONTROL_MODE_MASK |
+			DAC_ATTEN_SPEED_SLOW_MASK |
+			DAC_DEMPH_DISABLE_MASK;
+	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+		printk("config_codec: i2c_master_send failed to send cmd to DAC_CONTROL_3_REG_DATA\n");
+		return ret;
+	}
+	msleep(10);
+	cmd[0] = PCM_ADC_CONTROL_THREE_REG;
+	cmd[1] = 0x00 | ADC_MASTER_VOLUME_CONTROL_MODE_MASK |
+			ADC_ATTEN_SPEED_SLOW_MASK;
+	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CONTROL_THREE_REG\n");
+		return ret;
+	}
+	msleep(10);
+	/**
+	* ADC settings
+	* -> Master where master clock is 512xfs
+	* -> data format is left justified 24 bit TDM
+	*/
+	cmd[0] = PCM_ADC_CNTRL_ONE_REG;
+	cmd[1] = 0x00 | ADC_MASTER_MODE_512xFS |
+			ADC_I2S_24_BIT_MODE_MASK;
+	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CNTRL_ONE_REG\n");
+		return ret;
+	}
+	msleep(10);
+	// Power up both DAC and ADC
+	cmd[0] = PCM_ADC_CNTRL_TWO_REG;
+	cmd[1] = 0x00 | ADC_CHAN_0_1_POWER_SAVE_DISABLE_MASK |
+			ADC_CHAN_2_3_POWER_SAVE_DISABLE_MASK |
+			ADC_CHAN_4_5_POWER_SAVE_DISABLE_MASK;
+	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CNTRL_TWO_REG to power up adcs\n");
+		return ret;
+	}
+	msleep(10);
+	cmd[0] = PCM_DAC_CNTRL_TWO_REG;
+	cmd[1] = 0x00 | DAC_CHAN_0_1_NORMAL_MODE_MASK |
+			DAC_CHAN_2_3_NORMAL_MODE_MASK |
+			DAC_CHAN_4_5_NORMAL_MODE_MASK |
+			DAC_CHAN_6_7_NORMAL_MODE_MASK;
+	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+		printk("config_codec: i2c_master_send failed to send cmd to PCM_DAC_CNTRL_REG_TWO to power up dacs\n");
+		return ret;
+	}
+	printk("config_codec: Codec configured successfully\n");
+	return 0;
 }
 
 int i2c_init(void) {
@@ -150,6 +227,7 @@ int i2c_init(void) {
 	if (config_codec(i2c_client_device))
 		printk("i2c_init::config_codec failed\n");
 	
+	printk("i2c_init: i2c init successful\n");
 	return 0;
 }
 
