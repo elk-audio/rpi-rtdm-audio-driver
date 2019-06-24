@@ -218,6 +218,6 @@
 #define ADC_ATTEN_SPEED_FAST_MASK			0x00
 #define ADC_ATTEN_SPEED_SLOW_MASK			0x40
 
-extern int i2c_init(void);
-extern int i2c_exit(void);
+extern int rpi_rtdm_i2c_init(void);
+extern int rpi_rtdm_i2c_exit(void);
 #endif

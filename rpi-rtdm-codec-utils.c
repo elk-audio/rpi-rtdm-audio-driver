@@ -80,7 +80,7 @@ static struct i2c_board_info i2c_pcm3168a_board_info[] =  {
 static int config_clk_gen(struct i2c_client* i2c_client_dev) {
 	char cmd[2];
 	int i, ret = 0;
-	printk("i2c_init: i2c_client_dev for clkgen: %p \n", i2c_client_dev);
+	//printk("i2c_init: i2c_client_dev for clkgen: %p \n", i2c_client_dev);
 
 	for (i = CLKGEN_CLK0_CNTRL_REG; i <= CLKGEN_CLK7_CNTRL_REG; i++) {
 		cmd[0] = i;
@@ -116,14 +116,14 @@ static int config_clk_gen(struct i2c_client* i2c_client_dev) {
 		return ret;
 	}
 	msleep(50);
-	printk("i2c_init: done with clk gen configuration\n");
+	//printk("i2c_init: done with clk gen configuration\n");
 	return 0;
 }
 
 static int config_codec(struct i2c_client* i2c_client_dev) {
 	char cmd[2];
 	int ret;
-	printk("i2c_init: i2c_client_dev for codec: %p \n", i2c_client_dev);
+	//printk("i2c_init: i2c_client_dev for codec: %p \n", i2c_client_dev);
 	cmd[0] = PCM_DAC_CNTRL_TWO_REG;
 	cmd[1] = 0x00 | DAC_CHAN_0_1_DISABLED_MODE_MASK |
 			DAC_CHAN_2_3_DISABLED_MODE_MASK |
@@ -200,11 +200,11 @@ static int config_codec(struct i2c_client* i2c_client_dev) {
 		printk("config_codec: i2c_master_send failed to send cmd to PCM_DAC_CNTRL_REG_TWO to power up dacs\n");
 		return ret;
 	}
-	printk("config_codec: Codec configured successfully\n");
+	//printk("config_codec: Codec configured successfully\n");
 	return 0;
 }
 
-int i2c_init(void) {
+int rpi_rtdm_i2c_init(void) {
 	int ret;
 	// Setup device
 	i2c_device_adapter = i2c_get_adapter(1);
@@ -227,12 +227,13 @@ int i2c_init(void) {
 	if (config_codec(i2c_client_device))
 		printk("i2c_init::config_codec failed\n");
 	
-	printk("i2c_init: i2c init successful\n");
+	//printk("i2c_init: i2c init successful\n");
 	return 0;
 }
 
-int i2c_exit(void) {
+int rpi_rtdm_i2c_exit(void) {
 	printk(KERN_INFO "i2c-exit: unregister i2c-client\n");
 	i2c_unregister_device(i2c_client_device);
+	gpio_free(CODEC_RST_GPIO);
 	return 0;
 }
