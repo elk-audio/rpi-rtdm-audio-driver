@@ -16,12 +16,19 @@
 #include <linux/slab.h>
 #include <linux/i2c.h>
 #include <linux/delay.h>
+#include <linux/of_address.h>
+#include <linux/platform_device.h>
+#include <linux/io.h>
+
+
+
 
 /* RTDM headers */
 #include <rtdm/driver.h>
 #include <rtdm/rtdm.h>
 
 #include "rpi-rtdm-codec-utils.h"
+#include "rpi-rtdm-i2s.h"
 
 #define I2S_INTERRUPT		85
 #define RTDM_SUBCLASS_GPIO	0
@@ -60,37 +67,58 @@ static struct rtdm_driver audio_driver = {
 	},
 };
 
-static struct rtdm_device device = {
+static struct rtdm_device rtdm_audio_device = {
 	.driver = &audio_driver,
 	.label = DEVICE_NAME,
 };
 
-static int __init audio_rtdm_driver_init(void) {
+
+
+static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 	int ret;
 
-	printk("audio_rtdm: Audio RTDM driver starting init ...\n");
+	//printk("audio_rtdm: Audio RTDM driver starting init ...\n");
 
-	ret = rtdm_dev_register(&device);
+	ret = rtdm_dev_register(&rtdm_audio_device);
 	if (ret) {
-		rtdm_dev_unregister(&device);
+		rtdm_dev_unregister(&rtdm_audio_device);
 		printk(KERN_INFO "audio_rtdm: driver init failed\n");
 		return ret;
 	}
+	
+	if (rpi_rtdm_i2c_init())
+		printk("audio_rtdm_driver_probe: rpi_rtdm_i2c_init failed\n");
 
+	if (rpi_rtdm_i2s_init(pdev))
+		printk("audio_rtdm_driver_probe: rpi_rtdm_i2s_init failed\n");
+	
 	printk(KERN_INFO "audio_rtdm: driver initialized\n");
-	
-	if (i2c_init())
-		printk("i2c_init failed\n");
-	
 	return 0;
 }
 
-static void __exit audio_rtdm_driver_exit(void) {
+static int audio_rtdm_driver_remove(struct platform_device *pdev) {
 	printk(KERN_INFO "audio_rtdm: driver exiting...\n");
-	if (i2c_exit())
+	if (rpi_rtdm_i2c_exit())
 		printk("i2c_exit failed\n");
-	rtdm_dev_unregister(&device);
+	rtdm_dev_unregister(&rtdm_audio_device);
+	rpi_rtdm_remove_irq();
+	return 0;
 }
 
-module_init(audio_rtdm_driver_init)
-module_exit(audio_rtdm_driver_exit)
+static const struct of_device_id rpi_i2s_of_match[] = {
+	{ .compatible = "brcm,bcm2835-i2s", },
+	{},
+};
+
+MODULE_DEVICE_TABLE(of, rpi_i2s_of_match);
+
+static struct platform_driver rpi_i2s_rtdm_driver = {
+	.probe		= audio_rtdm_driver_probe,
+	.remove		= audio_rtdm_driver_remove,
+	.driver		= {
+		.name	= "bcm2835-i2s",
+		.of_match_table = rpi_i2s_of_match,
+	},
+};
+
+module_platform_driver(rpi_i2s_rtdm_driver);
