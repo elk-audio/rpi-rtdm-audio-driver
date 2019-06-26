@@ -8,19 +8,21 @@
  * @copyright MIND music labs (c) 2019
  * 
  */
-#include <linux/regmap.h>
 #include <linux/platform_device.h>
 #include <linux/device.h>
 #include <linux/types.h>
 #include <linux/slab.h>
 #include <linux/of_address.h>
 #include <linux/delay.h>
-#include <linux/irq.h>
-#include <linux/interrupt.h>
 #include <asm/barrier.h>
 #include <linux/spinlock.h>
 #include <rtdm/driver.h>
 #include <linux/ipipe_domain.h>
+#include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
+
+/* #include <linux/irq.h>
+#include <linux/interrupt.h> */
 
 #include "rpi-rtdm-i2s.h"
 
@@ -40,18 +42,37 @@ module_param(rx_fifo_errors, ulong, 0644);
 static unsigned long tx_fifo_errors = 0;
 module_param(tx_fifo_errors, ulong, 0644);
 
-static rtdm_irq_t i2s_irq_handle;
-struct rpi_i2s_dev *rpidev;
-static volatile void *i2s_regbase;
+struct rpi_i2s_dev *rpi_device_i2s;
 
+static int rpi_rtdm_dma_setup(struct rpi_i2s_dev *rpi_dev)
+{
+	struct device *dev = (struct device*) rpi_dev->dev;
+
+	rpi_dev->dma_tx = dma_request_slave_channel(dev, "tx");
+	if (!rpi_dev->dma_tx) {
+		printk("rpi_rtdm_dma_setup: request for dma_tx chan failed\n");
+		return -ENODEV;
+	}
+
+	rpi_dev->dma_rx = dma_request_slave_channel(dev, "rx");
+	if (!rpi_dev->dma_rx) {
+		printk("rpi_rtdm_dma_setup: request for dma_rx chan failed\n");
+		dma_release_channel(rpi_dev->dma_tx);
+		rpi_dev->dma_tx = NULL;
+		return -ENODEV;
+	}
+	printk("rpi_rtdm_dma_setup: Successful.\n");
+	return 0;
+}
 
 static void rpi_rtdm_clear_fifos(struct rpi_i2s_dev *dev,
 				    bool tx, bool rx)
 {
-	uint32_t csreg;
+	uint32_t csreg, sync;
 	uint32_t i2s_active_state;
 	uint32_t off;
 	uint32_t clr;
+	int timeout = 1000;
 
 	off =  tx ? BCM2835_I2S_TXON : 0;
 	off |= rx ? BCM2835_I2S_RXON : 0;
@@ -60,28 +81,37 @@ static void rpi_rtdm_clear_fifos(struct rpi_i2s_dev *dev,
 	clr |= rx ? BCM2835_I2S_RXCLR : 0;
 
 	/* Backup the current state */
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_CS_A_REG, &csreg);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG, &csreg);
 	i2s_active_state = csreg & (BCM2835_I2S_RXON | BCM2835_I2S_TXON);
 
 	/* Stop I2S module */
-	regmap_update_bits(dev->i2s_regmap, BCM2835_I2S_CS_A_REG, off, 0);
+	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG, off, 0);
 
 	/*
 	 * Clear the FIFOs
 	 * Requires at least 2 PCM clock cycles to take effect
 	 */
-	regmap_update_bits(dev->i2s_regmap, BCM2835_I2S_CS_A_REG, clr, clr);
+	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG, clr, clr);
 
-	/* Wait for some clock cycles */
-	//msleep(5);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG, &sync);
+	sync &= BCM2835_I2S_SYNC;
+
+	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG,
+			BCM2835_I2S_SYNC, ~sync);
+
+	/* Wait for the SYNC flag changing it's state */
+	while (--timeout) {
+		i2s_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG, &csreg);
+		if ((csreg & BCM2835_I2S_SYNC) != sync)
+			break;
+	}
 
 	/* Restore I2S state */
-	regmap_update_bits(dev->i2s_regmap, BCM2835_I2S_CS_A_REG,
+	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG,
 			BCM2835_I2S_RXON | BCM2835_I2S_TXON, i2s_active_state);
 }
 
-static  int rpi_i2s_rtdm_interrupt(rtdm_irq_t *irqh)
-//static irqreturn_t rpi_i2s_interrupt(int irq, void *dev_id)
+/* static irqreturn_t rpi_i2s_interrupt(int irq, void *dev_id)
 {
 	uint32_t  i, intr_status, cs_a, fifo_reg, err;
 	unsigned long flags;
@@ -93,98 +123,12 @@ static  int rpi_i2s_rtdm_interrupt(rtdm_irq_t *irqh)
 	
 	//raw_spin_lock_irqsave(&dev->lock, flags);
 	
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_CS_A_REG, &cs_a);
-	
-	// Check if RX Fifo has overflow error
-	if (cs_a & BCM2835_I2S_CS_RXERR) {
-		err = 1;
-		rx_fifo_errors++;
-	}
-	// Check if TX Fifo has overflow error
-	if (cs_a & BCM2835_I2S_CS_TXERR) {
-		err = 1;
-		tx_fifo_errors++;
-	}
-
-	// Check if RX Fifo crossed RXTHR num of samples
-	if (cs_a & BCM2835_I2S_RXR) {
-		for (i = 0; i < 64; i++) {
-			regmap_read(dev->i2s_regmap, BCM2835_I2S_CS_A_REG, 
-			&cs_a);
-			if (cs_a & BCM2835_I2S_TXD) {
-				regmap_read(dev->i2s_regmap,
-				BCM2835_I2S_FIFO_A_REG,
-				&fifo_reg);
-				regmap_write(dev->i2s_regmap,
-				BCM2835_I2S_FIFO_A_REG,
-				fifo_reg);
-			}
-		}
-	}
-	if (err) {
-		// Clear the fifos
-		rpi_rtdm_clear_fifos(dev, true, true);
-		cs_a = BCM2835_I2S_CS_TXERR | BCM2835_I2S_CS_RXERR;
-		regmap_update_bits(dev->i2s_regmap, BCM2835_I2S_CS_A_REG,
-		cs_a, cs_a);
-	}
-	intr_status = BCM2835_I2S_INT_RXERR |
-			BCM2835_I2S_INT_TXERR |
-			BCM2835_I2S_INT_RXR |
-			BCM2835_I2S_INT_TXW;
-	regmap_write(dev->i2s_regmap, BCM2835_I2S_INTSTC_A_REG, intr_status);
 	i2s_interrupts++;
 	//raw_spin_unlock_irqrestore(&dev->lock, flags);
 	
 	*i2s_intstatus = 0x0F;
-	return RTDM_IRQ_HANDLED;
-}
-
-static bool rpi_i2s_volatile_reg(struct device *dev, unsigned int reg)
-{
-	switch (reg) {
-	case BCM2835_I2S_CS_A_REG:
-	case BCM2835_I2S_FIFO_A_REG:
-	case BCM2835_I2S_INTSTC_A_REG:
-	case BCM2835_I2S_GRAY_REG:
-		return true;
-	default:
-		return false;
-	};
-}
-
-static bool rpi_i2s_precious_reg(struct device *dev, unsigned int reg)
-{
-	switch (reg) {
-	case BCM2835_I2S_FIFO_A_REG:
-		return true;
-	default:
-		return false;
-	};
-}
-
-static const struct reg_default rpi_i2s_reg_defaults[] = {
-	{0x00, 0x00000000},
-	{0x08, 0x00000000},
-	{0x0c, 0x00000000},
-	{0x10, 0x00000000},
-	{0x14, 0x00000000},
-	{0x18, 0x00000000},
-	{0x1c, 0x00000000},
-	{0x20, 0x00000000},
-};
-
-static const struct regmap_config rpi_regmap_config = {
-	.reg_bits = 32,
-	.reg_stride = 4,
-	.val_bits = 32,
-	.max_register = BCM2835_I2S_GRAY_REG,
-	.reg_defaults = rpi_i2s_reg_defaults,
-	.num_reg_defaults = ARRAY_SIZE(rpi_i2s_reg_defaults),
-	.precious_reg = rpi_i2s_precious_reg,
-	.volatile_reg = rpi_i2s_volatile_reg,
-	.cache_type = REGCACHE_RBTREE,
-};
+	return IRQ_HANDLED;
+} */
 
 static void rpi_rtdm_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
 {
@@ -193,11 +137,11 @@ static void rpi_rtdm_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
 	mask = BCM2835_I2S_RXON | BCM2835_I2S_TXON;
 
 	if (cmd == RPI_I2S_START_CMD) {
-		regmap_update_bits(dev->i2s_regmap,
+		i2s_reg_update_bits(dev->base_addr,
 			BCM2835_I2S_CS_A_REG, mask, mask);
 	}
 	else {
-		regmap_update_bits(dev->i2s_regmap,
+		i2s_reg_update_bits(dev->base_addr,
 			BCM2835_I2S_CS_A_REG, mask, 0);
 	}
 }
@@ -207,7 +151,6 @@ static void rpi_rtdm_configure_i2s(struct rpi_i2s_dev * dev)
 	unsigned int data_length, framesync_length;
 	unsigned int slots, slot_width;
 	int frame_length;
-	unsigned int rx_mask, tx_mask;
 	unsigned int rx_ch1_pos, rx_ch2_pos, tx_ch1_pos, tx_ch2_pos;
 	unsigned int mode, format;
 	bool bit_clock_master = false;
@@ -243,13 +186,13 @@ static void rpi_rtdm_configure_i2s(struct rpi_i2s_dev * dev)
 	if (frame_start_falling_edge)
 		mode |= BCM2835_I2S_FSI;
 
-	regmap_write(dev->i2s_regmap, BCM2835_I2S_MODE_A_REG, mode);
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_MODE_A_REG, mode);
 
-	regmap_write(dev->i2s_regmap, BCM2835_I2S_RXC_A_REG,format
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_RXC_A_REG,format
 		| BCM2835_I2S_CH1_POS(rx_ch1_pos)
 		| BCM2835_I2S_CH2_POS(rx_ch2_pos));
 
-	regmap_write(dev->i2s_regmap, BCM2835_I2S_TXC_A_REG,format
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_TXC_A_REG,format
 		|BCM2835_I2S_CH1_POS(tx_ch1_pos)
 		| BCM2835_I2S_CH2_POS(tx_ch2_pos));
 
@@ -258,37 +201,36 @@ static void rpi_rtdm_configure_i2s(struct rpi_i2s_dev * dev)
 
 	/* dev_dbg(dev->dev, "sampling rate: %d bclk rate: %d\n",
 		params_rate(params), bclk_rate); */
-	regmap_update_bits(dev->i2s_regmap, BCM2835_I2S_MODE_A_REG,
+	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_MODE_A_REG,
 			BCM2835_I2S_CLKDIS, 0);
 }
 
 static void rpi_rtdm_i2s_enable(struct rpi_i2s_dev *dev)
 {	
 	/* Disable RAM STBY */
-	regmap_update_bits(dev->i2s_regmap, BCM2835_I2S_CS_A_REG,
+	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG,
 			BCM2835_I2S_STBY, BCM2835_I2S_STBY);
 
 	/* Enable PCM block */
-	regmap_update_bits(dev->i2s_regmap, BCM2835_I2S_CS_A_REG,
+	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG,
 			BCM2835_I2S_EN, BCM2835_I2S_EN);	
 }
 
-static void rpi_rtdm_enable_intrrupt(struct rpi_i2s_dev *dev)
+static void rpi_rtdm_clear_regs(struct rpi_i2s_dev *dev)
 {
-	uint32_t cs_a, int_en;
-
-	cs_a = BCM2835_I2S_TXTHR(0x00);
-	regmap_update_bits(dev->i2s_regmap, BCM2835_I2S_CS_A_REG,
-			cs_a, cs_a);
-	int_en = BCM2835_I2S_INT_TXW;
-	/* Set the INTEN_A reg for the rx interrupt */
-	regmap_write(dev->i2s_regmap, BCM2835_I2S_INTEN_A_REG, int_en);
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_CS_A_REG, 0);
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_MODE_A_REG, 0);
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_RXC_A_REG, 0);
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_TXC_A_REG, 0);
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_DREQ_A_REG, 0);
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_INTEN_A_REG, 0);
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_INTSTC_A_REG, 0);
+	i2s_reg_write(dev->base_addr, BCM2835_I2S_GRAY_REG, 0);
 }
-
 int rpi_rtdm_i2s_init(struct platform_device *pdev)
 {
 	struct rpi_i2s_dev *dev;
-	int irq,i;
+	int i;
 	int ret = 0;
 	struct resource *mem_resource;
 	void __iomem *base;
@@ -300,21 +242,14 @@ int rpi_rtdm_i2s_init(struct platform_device *pdev)
 			   GFP_KERNEL);
 	if (!dev)
 		return -ENOMEM;
-	rpidev = dev;
+	rpi_device_i2s = dev;
 	mem_resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	base = devm_ioremap_resource(&pdev->dev, mem_resource);
-	i2s_regbase = base;
 	if (IS_ERR(base)) {
 		printk("rpi_rtdm_i2s_init: devm_ioremap_resource failed.");
 		return PTR_ERR(base);
 	}
-
-	dev->i2s_regmap = devm_regmap_init_mmio(&pdev->dev, base,
-				&rpi_regmap_config);
-	if (IS_ERR(dev->i2s_regmap)) {
-		printk("rpi_rtdm_i2s_init: devm_regmap_init_mmio failed.");
-		return PTR_ERR(dev->i2s_regmap);
-	}
+	dev->base_addr = base;
 
 	addr = of_get_address(pdev->dev.of_node, 0, NULL, NULL);
 	if (!addr) {
@@ -323,70 +258,46 @@ int rpi_rtdm_i2s_init(struct platform_device *pdev)
 	}
 	
 	dma_base = be32_to_cpup(addr);
+	dev->dev = &pdev->dev;
 	//printk("i2s_init: dma_base = %p \n",dma_base);
 	/* TO DO: Dma support */
-
-	
-	irq_set_irq_type(i2s_irq, IRQ_TYPE_EDGE_RISING);
-	ret = rtdm_irq_request(&i2s_irq_handle, i2s_irq,
-				rpi_i2s_rtdm_interrupt, RTDM_IRQTYPE_EDGE, "rpi_i2s", dev);
-	if (ret) {
-		printk(KERN_ERR "rpi_rtdm_i2s_init failed to get \
-		 interrupt\n");
-	}
-
-	rpi_rtdm_i2s_enable(dev);
+	if (rpi_rtdm_dma_setup(dev))
+		return -ENODEV;
+	rpi_rtdm_clear_regs(dev);
 	rpi_rtdm_configure_i2s(dev);
+	rpi_rtdm_i2s_enable(dev);
 	/* Clear the fifos */
 	rpi_rtdm_clear_fifos(dev, true, true);
 
+	for(i = 0; i < 64; i++)
+		i2s_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
+
+	msleep(5);
 	/* print all the registers just for debug*/
-	/* regmap_read(dev->i2s_regmap, BCM2835_I2S_CS_A_REG, &val);
-	printk("rpi_rtdm_i2s_init: BCM2835_I2S_CS_A_REG = 0x%08X and val in base is %08X\n",val,*(int*)base);
-
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_MODE_A_REG, &val);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG, &val);
+	printk("rpi_rtdm_i2s_init: BCM2835_I2S_CS_A_REG = 0x%08X\n",val);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_MODE_A_REG, &val);
 	printk("rpi_rtdm_i2s_init: BCM2835_I2S_MODE_A_REG = 0x%08X\n",val);
-
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_RXC_A_REG, &val);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_RXC_A_REG, &val);
 	printk("rpi_rtdm_i2s_init: BCM2835_I2S_RXC_A_REG = 0x%08X\n",val);
-
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_TXC_A_REG, &val);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_TXC_A_REG, &val);
 	printk("rpi_rtdm_i2s_init: BCM2835_I2S_TXC_A_REG = 0x%08X\n",val);
-
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_INTEN_A_REG, &val);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_INTEN_A_REG, &val);
 	printk("rpi_rtdm_i2s_init: BCM2835_I2S_INTEN_A_REG = 0x%08X\n",val);
-
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_INTSTC_A_REG, &val);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_INTSTC_A_REG, &val);
 	printk("rpi_rtdm_i2s_init: BCM2835_I2S_INTSTC_A_REG = 0x%08X\n",val);
-
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_DREQ_A_REG, &val);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_DREQ_A_REG, &val);
 	printk("rpi_rtdm_i2s_init: BCM2835_I2S_DREQ_A_REG = 0x%08X\n",val);
-
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_GRAY_REG, &val);
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_GRAY_REG, &val);
 	printk("rpi_rtdm_i2s_init: BCM2835_I2S_GRAY_REG = 0x%08X\n",val);
-
-	printk("rpi_rtdm_i2s_init: using i2s_irq %d\n",i2s_irq); */
-	msleep(50);
-	for (i=0; i < 64; i++) {
-		regmap_write(dev->i2s_regmap,
-				BCM2835_I2S_FIFO_A_REG,
-				0x00000000);
-	}
-	
-	rpi_rtdm_enable_intrrupt(dev);
 
 	msleep(1000);
 	/* start the i2s controller */
-	rpi_rtdm_i2s_start_stop(dev, RPI_I2S_START_CMD);
-	msleep(10);
-
-	regmap_read(dev->i2s_regmap, BCM2835_I2S_CS_A_REG, &val);
-	printk("rpi_rtdm_i2s_init: BCM2835_I2S_CS_A_REG = 0x%08X\n",val);
-	
+	//rpi_rtdm_i2s_start_stop(dev, RPI_I2S_START_CMD);
 	return ret;
 }
 
-void rpi_rtdm_remove_irq(void) {
-	free_irq(i2s_irq, rpidev);
-	//rtdm_irq_free(&i2s_irq_handle);
+void rpi_rtdm_remove_irq(void)
+{
+	
 }

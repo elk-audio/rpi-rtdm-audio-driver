@@ -86,12 +86,14 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 		return ret;
 	}
 	
-	if (rpi_rtdm_i2c_init())
+	if (rpi_rtdm_i2c_init()) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2c_init failed\n");
-
-	if (rpi_rtdm_i2s_init(pdev))
+		return -1;
+	}
+	if (rpi_rtdm_i2s_init(pdev)) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2s_init failed\n");
-	
+		return -1;
+	}
 	printk(KERN_INFO "audio_rtdm: driver initialized\n");
 	return 0;
 }

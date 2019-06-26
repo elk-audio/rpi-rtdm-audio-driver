@@ -15,6 +15,8 @@
 #include <linux/clk.h>
 #include <linux/ipipe.h>
 #include <linux/ipipe_domain.h>
+#include <asm/barrier.h>
+#include <linux/err.h>
 
 #define RPI_I2S_IRQ_NUM 85
 
@@ -92,12 +94,40 @@
 /* Frame length register is 10 bit, maximum length 1024 */
 #define BCM2835_I2S_MAX_FRAME_LENGTH	1024
 
+static inline void i2s_reg_write(void *base_addr, uint32_t reg_addr,
+				uint32_t value)
+{
+	uint32_t *reg = base_addr + reg_addr;
+	wmb();
+	*reg = value;
+}
+
+static inline void i2s_reg_update_bits(void *base_addr, uint32_t reg_addr,
+				uint32_t mask, uint32_t value)
+{
+	uint32_t *reg = base_addr + reg_addr;
+	wmb();
+	*reg &= (~mask);
+	*reg |= (mask & value);
+}
+
+static inline void i2s_reg_read(void *base_addr, uint32_t reg_addr,
+			uint32_t *value)
+{
+	uint32_t *reg = base_addr + reg_addr;
+	wmb();
+	*value = *reg;
+	rmb();
+	//printk("i2s_reg_read:  reg ptr = %p\n",reg);
+}
+
 /* General device struct */
 struct rpi_i2s_dev {
 	struct device				*dev;
-	unsigned int				fmt;
+	void 					*base_addr;
+	struct dma_chan				*dma_tx;
+	struct dma_chan				*dma_rx;
 	ipipe_spinlock_t 			lock;
-	struct regmap				*i2s_regmap;
 	struct clk				*clk;
 	bool					clk_prepared;
 	int					clk_rate;
