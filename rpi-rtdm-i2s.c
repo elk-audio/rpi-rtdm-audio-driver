@@ -10,6 +10,7 @@
  */
 #include <linux/platform_device.h>
 #include <linux/device.h>
+#include <linux/clk.h>
 #include <linux/types.h>
 #include <linux/slab.h>
 #include <linux/of_address.h>
@@ -20,6 +21,8 @@
 #include <linux/ipipe_domain.h>
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
+#include <linux/slab.h>
+#include <linux/string.h>
 
 /* #include <linux/irq.h>
 #include <linux/interrupt.h> */
@@ -30,6 +33,11 @@
 #define RPI_I2S_START_CMD 1
 
 #define DEVICE_NAME "rtdm_audio"
+
+#define DEFAULT_AUDIO_SPI_N_CHANNELS			8
+#define DEFAULT_AUDIO_SPI_N_FRAMES_PER_BUFFER		32
+#define NUM_OF_WORDS (DEFAULT_AUDIO_SPI_N_CHANNELS * \
+DEFAULT_AUDIO_SPI_N_FRAMES_PER_BUFFER)
 
 static unsigned long i2s_interrupts = 0;
 module_param(i2s_interrupts, ulong, 0644);
@@ -42,7 +50,207 @@ module_param(rx_fifo_errors, ulong, 0644);
 static unsigned long tx_fifo_errors = 0;
 module_param(tx_fifo_errors, ulong, 0644);
 
-struct rpi_i2s_dev *rpi_device_i2s;
+static struct rpi_i2s_dev *rpi_device_i2s;
+static struct i2s_transfer *drv_i2s_transfer;
+static dma_addr_t dummy_dma;
+
+static int rpi_i2s_setup_clock(struct rpi_i2s_dev *dev)
+{
+	int ret;
+	unsigned long bclk_rate = (48000 * 64);
+
+	ret = clk_set_rate(dev->clk, bclk_rate);
+	if (ret)
+		return ret;
+	dev->clk_rate = bclk_rate;
+	clk_prepare_enable(dev->clk);
+	dev->clk_prepared = true;
+	return 0;
+}
+
+static int rpi_rtdm_map_buf(struct device *dma_dev,
+		       struct sg_table *sgt, void *buf, size_t len,
+		       enum dma_data_direction dma_mapping_dir)
+{
+	unsigned int max_seg_size ;
+	int desc_len;
+	int sgs;
+	struct page *vm_page;
+	void *sg_buf;
+	size_t min;
+	int i, ret;
+	const bool vmalloced_buf = is_vmalloc_addr(buf);
+
+	max_seg_size = dma_get_max_seg_size(dma_dev);
+
+	if (vmalloced_buf) {
+		desc_len = min_t(int, max_seg_size, PAGE_SIZE);
+		sgs = DIV_ROUND_UP(len + offset_in_page(buf), desc_len);
+	} else if (virt_addr_valid(buf)) {
+		desc_len = min_t(int, max_seg_size, MAX_DMA_LEN);
+		sgs = DIV_ROUND_UP(len, desc_len);
+	} else {
+		return -EINVAL;
+	}
+
+	ret = sg_alloc_table(sgt, sgs, GFP_KERNEL);
+	if (ret != 0)
+		return ret;
+
+	for (i = 0; i < sgs; i++) {
+
+		if (vmalloced_buf) {
+			min = min_t(size_t,
+				    len, desc_len - offset_in_page(buf));
+			vm_page = vmalloc_to_page(buf);
+			if (!vm_page) {
+				sg_free_table(sgt);
+				return -ENOMEM;
+			}
+			sg_set_page(&sgt->sgl[i], vm_page,
+				    min, offset_in_page(buf));
+		} else {
+			min = min_t(size_t, len, desc_len);
+			sg_buf = buf;
+			sg_set_buf(&sgt->sgl[i], sg_buf, min);
+		}
+
+		buf += min;
+		len -= min;
+	}
+
+	ret = dma_map_sg(dma_dev, sgt->sgl, sgt->nents, dma_mapping_dir);
+	if (!ret)
+		ret = -ENOMEM;
+	if (ret < 0) {
+		sg_free_table(sgt);
+		return ret;
+	}
+
+	sgt->nents = ret;
+	return 0;
+}
+
+static void rpi_rtdm_unmap_buf(struct device *dma_dev,
+			  struct sg_table *sgt,
+			  enum dma_data_direction dma_mapping_dir)
+{
+	if (sgt->orig_nents) {
+		dma_unmap_sg(dma_dev, sgt->sgl, sgt->orig_nents,
+		dma_mapping_dir);
+		sg_free_table(sgt);
+	}
+}
+
+static int rpi_rtdm_map_buffers(struct rpi_i2s_dev *dev,
+		struct i2s_transfer *transfer)
+{
+	int ret;
+	struct device *tx_dma_dev = dev->dma_tx->device->dev;
+	struct device *rx_dma_dev = dev->dma_rx->device->dev;
+
+	ret = rpi_rtdm_map_buf(tx_dma_dev, &transfer->tx_sgt,
+				transfer->tx_buf, transfer->len,
+				 DMA_TO_DEVICE);
+	if (ret)
+		return ret;
+
+	ret = rpi_rtdm_map_buf(rx_dma_dev, &transfer->rx_sgt,
+				transfer->rx_buf, transfer->len,
+				 DMA_FROM_DEVICE);
+	if (ret) {
+		printk("rpi_rtdm_map_buf: Failed to map rx_buf\n");
+		rpi_rtdm_unmap_buf(tx_dma_dev, &transfer->tx_sgt,
+				DMA_TO_DEVICE);
+		return ret;
+	}
+	dev->current_transfer = transfer;
+	return ret;
+}
+
+static void rpi_rtdm_dma_callback(void *data)
+{
+	uint32_t val;
+	struct rpi_i2s_dev *dev = data;
+	/* Handle the I2s flags */
+	printk("dma call back !\n");
+	i2s_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG, &val);
+	printk("rpi_rtdm_i2s_init: BCM2835_I2S_CS_A_REG = 0x%08X\n",val);
+}
+
+static struct dma_async_tx_descriptor *
+rpi_rtdm_dma_prepare_one(struct rpi_i2s_dev *dev,
+			enum dma_transfer_direction dir)
+{
+	struct dma_slave_config cfg;
+	struct dma_chan *chan;
+	struct sg_table *sgt;
+	int ret;
+
+	struct i2s_transfer *transfer = dev->current_transfer;
+
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.direction = dir;
+
+	if (dir == DMA_MEM_TO_DEV) {
+		cfg.dst_addr = dev->fifo_dma_addr;
+		cfg.dst_addr_width = dev->addr_width;
+		cfg.dst_maxburst = dev->dma_burst_size;
+
+		sgt = &transfer->tx_sgt;
+		chan = dev->dma_tx;
+	} else {
+		cfg.src_addr = dev->fifo_dma_addr;
+		cfg.src_addr_width = dev->addr_width;
+		cfg.src_maxburst = dev->dma_burst_size;
+
+		sgt = &transfer->rx_sgt;
+		chan = dev->dma_rx;
+	}
+
+	ret = dmaengine_slave_config(chan, &cfg);
+	if (ret) {
+		dev_warn(dev->dev, "DMA slave config failed\n");
+		return NULL;
+	}
+
+	return dmaengine_prep_slave_sg(chan, sgt->sgl, sgt->nents, dir,
+				       DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+}
+
+static int rpi_rtdm_dma_prepare(struct rpi_i2s_dev *dev)
+{
+	int err;
+
+	dev->tx_desc = rpi_rtdm_dma_prepare_one(dev, DMA_MEM_TO_DEV);
+	if (!dev->tx_desc) {
+		dev_err(dev->dev,
+			"failed to get DMA TX descriptor\n");
+		err = -EBUSY;
+		return err;
+	}
+
+	dev->rx_desc = rpi_rtdm_dma_prepare_one(dev, DMA_DEV_TO_MEM);
+	if (!dev->tx_desc) {
+		dev_err(dev->dev,
+			"failed to get DMA RX descriptor\n");
+		err = -EBUSY;
+		dmaengine_terminate_async(dev->dma_tx);
+		return err;
+	}
+	dev->rx_desc->callback = rpi_rtdm_dma_callback;
+	dev->rx_desc->callback_param = dev;
+	return 0;
+}
+
+static void rpi_rtdm_start_dma(struct rpi_i2s_dev *dev)
+{
+	dmaengine_submit(dev->rx_desc);
+	dmaengine_submit(dev->tx_desc);
+
+	dma_async_issue_pending(dev->dma_rx);
+	dma_async_issue_pending(dev->dma_tx);
+}
 
 static int rpi_rtdm_dma_setup(struct rpi_i2s_dev *rpi_dev)
 {
@@ -61,6 +269,7 @@ static int rpi_rtdm_dma_setup(struct rpi_i2s_dev *rpi_dev)
 		rpi_dev->dma_tx = NULL;
 		return -ENODEV;
 	}
+
 	printk("rpi_rtdm_dma_setup: Successful.\n");
 	return 0;
 }
@@ -111,25 +320,6 @@ static void rpi_rtdm_clear_fifos(struct rpi_i2s_dev *dev,
 			BCM2835_I2S_RXON | BCM2835_I2S_TXON, i2s_active_state);
 }
 
-/* static irqreturn_t rpi_i2s_interrupt(int irq, void *dev_id)
-{
-	uint32_t  i, intr_status, cs_a, fifo_reg, err;
-	unsigned long flags;
-	struct rpi_i2s_dev *dev = rtdm_irq_get_arg(irqh, struct rpi_i2s_dev);
-	uint32_t *i2s_intreg = i2s_regbase + BCM2835_I2S_INTEN_A_REG;
-	uint32_t *i2s_intstatus = i2s_regbase + BCM2835_I2S_INTSTC_A_REG;
-	*i2s_intreg = 0x00;
-	printk("rpi_i2s_rtdm_interrupt !");
-	
-	//raw_spin_lock_irqsave(&dev->lock, flags);
-	
-	i2s_interrupts++;
-	//raw_spin_unlock_irqrestore(&dev->lock, flags);
-	
-	*i2s_intstatus = 0x0F;
-	return IRQ_HANDLED;
-} */
-
 static void rpi_rtdm_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
 {
 	uint32_t mask;
@@ -153,9 +343,9 @@ static void rpi_rtdm_configure_i2s(struct rpi_i2s_dev * dev)
 	int frame_length;
 	unsigned int rx_ch1_pos, rx_ch2_pos, tx_ch1_pos, tx_ch2_pos;
 	unsigned int mode, format;
-	bool bit_clock_master = false;
-	bool frame_sync_master = false;
-	bool frame_start_falling_edge = false;
+	bool bit_clock_master = true; //false;
+	bool frame_sync_master = true; //false;
+	bool frame_start_falling_edge = true;
 
 	data_length = 32;
 	mode = 0;
@@ -203,10 +393,21 @@ static void rpi_rtdm_configure_i2s(struct rpi_i2s_dev * dev)
 		params_rate(params), bclk_rate); */
 	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_MODE_A_REG,
 			BCM2835_I2S_CLKDIS, 0);
+	/* Setup the DMA parameters */
+	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG,
+			BCM2835_I2S_RXTHR(1)
+			| BCM2835_I2S_TXTHR(1)
+			| BCM2835_I2S_DMAEN, 0xffffffff);
+
+	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_DREQ_A_REG,
+			  BCM2835_I2S_TX_PANIC(0x10)
+			| BCM2835_I2S_RX_PANIC(0x30)
+			| BCM2835_I2S_TX(0x30)
+			| BCM2835_I2S_RX(0x20), 0xffffffff);
 }
 
 static void rpi_rtdm_i2s_enable(struct rpi_i2s_dev *dev)
-{	
+{
 	/* Disable RAM STBY */
 	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG,
 			BCM2835_I2S_STBY, BCM2835_I2S_STBY);
@@ -237,11 +438,21 @@ int rpi_rtdm_i2s_init(struct platform_device *pdev)
 	const __be32 *addr;
 	dma_addr_t dma_base;
 	uint32_t val;
+	int *tmp;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev),
 			   GFP_KERNEL);
 	if (!dev)
 		return -ENOMEM;
+	
+	dev->clk_prepared = false;
+	dev->clk = devm_clk_get(&pdev->dev, NULL);
+	if (IS_ERR(dev->clk)) {
+		dev_err(&pdev->dev, "could not get clk: %ld\n",
+			PTR_ERR(dev->clk));
+		return PTR_ERR(dev->clk);
+	}
+
 	rpi_device_i2s = dev;
 	mem_resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	base = devm_ioremap_resource(&pdev->dev, mem_resource);
@@ -256,13 +467,39 @@ int rpi_rtdm_i2s_init(struct platform_device *pdev)
 		dev_err(&pdev->dev, "rpi_rtdm_i2s_init: could not get DMA-register address\n");
 		return -EINVAL;
 	}
-	
+
 	dma_base = be32_to_cpup(addr);
+	dev->fifo_dma_addr = dma_base + BCM2835_I2S_FIFO_A_REG;
+	dev->addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+	dev->dma_burst_size = 2;
 	dev->dev = &pdev->dev;
-	//printk("i2s_init: dma_base = %p \n",dma_base);
-	/* TO DO: Dma support */
+	
+	drv_i2s_transfer = kcalloc(1, sizeof(struct i2s_transfer), GFP_KERNEL);
+
+	if (!drv_i2s_transfer) {
+		printk("rpi_rtdm_i2s_init: couldn't allocate drv_i2s_transfer\n");
+		return -ENOMEM;
+	}
+
 	if (rpi_rtdm_dma_setup(dev))
 		return -ENODEV;
+
+	drv_i2s_transfer->rx_buf = dma_zalloc_coherent(dev->dma_rx->device->dev,
+				4 * PAGE_SIZE, &dummy_dma, GFP_KERNEL);
+	drv_i2s_transfer->len = NUM_OF_WORDS * sizeof(int);
+	drv_i2s_transfer->tx_buf = drv_i2s_transfer->rx_buf +
+					drv_i2s_transfer->len;
+	printk("transfer->len = %d\n",drv_i2s_transfer->len);
+	printk("rx_buf = %p and tx_buf = %p\n",drv_i2s_transfer->rx_buf,drv_i2s_transfer->tx_buf);
+	ret = rpi_rtdm_map_buffers(dev, drv_i2s_transfer);
+	if (ret)
+		printk("rpi_rtdm_map_buffers failed!\n");
+
+	ret = rpi_rtdm_dma_prepare(dev);
+	if (ret)
+		printk("rpi_rtdm_dma_prepare failed!\n");
+
+	rpi_i2s_setup_clock(dev);
 	rpi_rtdm_clear_regs(dev);
 	rpi_rtdm_configure_i2s(dev);
 	rpi_rtdm_i2s_enable(dev);
@@ -270,9 +507,16 @@ int rpi_rtdm_i2s_init(struct platform_device *pdev)
 	rpi_rtdm_clear_fifos(dev, true, true);
 
 	for(i = 0; i < 64; i++)
-		i2s_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
+		i2s_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 
+		0x00000000);
+
+	tmp = (int *) drv_i2s_transfer->tx_buf;
+
+	for (i = 0; i < drv_i2s_transfer->len; i++)
+		tmp[i] = 0xAAAAAAAA;
 
 	msleep(5);
+	rpi_rtdm_start_dma(dev);
 	/* print all the registers just for debug*/
 	i2s_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG, &val);
 	printk("rpi_rtdm_i2s_init: BCM2835_I2S_CS_A_REG = 0x%08X\n",val);
@@ -293,11 +537,6 @@ int rpi_rtdm_i2s_init(struct platform_device *pdev)
 
 	msleep(1000);
 	/* start the i2s controller */
-	//rpi_rtdm_i2s_start_stop(dev, RPI_I2S_START_CMD);
+	rpi_rtdm_i2s_start_stop(dev, RPI_I2S_START_CMD);
 	return ret;
-}
-
-void rpi_rtdm_remove_irq(void)
-{
-	
 }

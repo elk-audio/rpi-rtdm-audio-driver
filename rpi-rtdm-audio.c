@@ -86,10 +86,10 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 		return ret;
 	}
 	
-	if (rpi_rtdm_i2c_init()) {
+	/* if (rpi_rtdm_codec_init()) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2c_init failed\n");
 		return -1;
-	}
+	} */
 	if (rpi_rtdm_i2s_init(pdev)) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2s_init failed\n");
 		return -1;
@@ -100,10 +100,9 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 
 static int audio_rtdm_driver_remove(struct platform_device *pdev) {
 	printk(KERN_INFO "audio_rtdm: driver exiting...\n");
-	if (rpi_rtdm_i2c_exit())
+	if (rpi_rtdm_codec_exit())
 		printk("i2c_exit failed\n");
 	rtdm_dev_unregister(&rtdm_audio_device);
-	rpi_rtdm_remove_irq();
 	return 0;
 }
 

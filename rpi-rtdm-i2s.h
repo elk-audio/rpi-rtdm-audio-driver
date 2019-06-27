@@ -17,6 +17,10 @@
 #include <linux/ipipe_domain.h>
 #include <asm/barrier.h>
 #include <linux/err.h>
+#include <linux/sizes.h>
+#include <linux/scatterlist.h>
+#include <linux/io.h>
+#include <linux/dmaengine.h>
 
 #define RPI_I2S_IRQ_NUM 85
 
@@ -121,18 +125,33 @@ static inline void i2s_reg_read(void *base_addr, uint32_t reg_addr,
 	//printk("i2s_reg_read:  reg ptr = %p\n",reg);
 }
 
-/* General device struct */
-struct rpi_i2s_dev {
-	struct device				*dev;
-	void 					*base_addr;
-	struct dma_chan				*dma_tx;
-	struct dma_chan				*dma_rx;
-	ipipe_spinlock_t 			lock;
-	struct clk				*clk;
-	bool					clk_prepared;
-	int					clk_rate;
+struct i2s_transfer {
+	void			*tx_buf;
+	void			*rx_buf;
+	unsigned		len;
+	struct sg_table 	tx_sgt;
+	struct sg_table 	rx_sgt;
 };
 
+/* General device struct */
+struct rpi_i2s_dev {
+	struct device			*dev;
+	void __iomem			*base_addr;
+	struct dma_chan			*dma_tx;
+	struct dma_chan			*dma_rx;
+	ipipe_spinlock_t 		lock;
+	struct clk			*clk;
+	bool				clk_prepared;
+	int				clk_rate;
+	struct i2s_transfer		*current_transfer;
+	dma_addr_t			fifo_dma_addr;
+	unsigned			addr_width;
+	unsigned			dma_burst_size;
+	struct dma_async_tx_descriptor 	*tx_desc;
+	struct dma_async_tx_descriptor	*rx_desc;
+};
+
+#define MAX_DMA_LEN		SZ_64K
+
 int rpi_rtdm_i2s_init(struct platform_device *pdev);
-void rpi_rtdm_remove_irq(void);
 #endif

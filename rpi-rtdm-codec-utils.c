@@ -120,7 +120,7 @@ static int config_clk_gen(struct i2c_client* i2c_client_dev) {
 	return 0;
 }
 
-static int config_codec(struct i2c_client* i2c_client_dev) {
+static int rpi_rtdm_config_codec(struct i2c_client* i2c_client_dev) {
 	char cmd[2];
 	int ret;
 	//printk("i2c_init: i2c_client_dev for codec: %p \n", i2c_client_dev);
@@ -204,7 +204,7 @@ static int config_codec(struct i2c_client* i2c_client_dev) {
 	return 0;
 }
 
-int rpi_rtdm_i2c_init(void) {
+int rpi_rtdm_codec_init(void) {
 	int ret;
 	// Setup device
 	i2c_device_adapter = i2c_get_adapter(1);
@@ -224,16 +224,16 @@ int rpi_rtdm_i2c_init(void) {
 	i2c_unregister_device(i2c_client_device);
 	i2c_client_device = i2c_new_device(i2c_device_adapter, i2c_pcm3168a_board_info);
 
-	if (config_codec(i2c_client_device))
+	if (rpi_rtdm_config_codec(i2c_client_device))
 		printk("i2c_init::config_codec failed\n");
 	
 	//printk("i2c_init: i2c init successful\n");
 	return 0;
 }
 
-int rpi_rtdm_i2c_exit(void) {
+int rpi_rtdm_codec_exit(void) {
 	printk(KERN_INFO "i2c-exit: unregister i2c-client\n");
-	i2c_unregister_device(i2c_client_device);
-	gpio_free(CODEC_RST_GPIO);
+	/* i2c_unregister_device(i2c_client_device);
+	gpio_free(CODEC_RST_GPIO); */
 	return 0;
 }
