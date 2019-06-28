@@ -131,6 +131,8 @@ struct i2s_transfer {
 	unsigned		len;
 	struct sg_table 	tx_sgt;
 	struct sg_table 	rx_sgt;
+	struct dma_async_tx_descriptor 	*tx_desc;
+	struct dma_async_tx_descriptor	*rx_desc;
 };
 
 /* General device struct */
@@ -147,8 +149,6 @@ struct rpi_i2s_dev {
 	dma_addr_t			fifo_dma_addr;
 	unsigned			addr_width;
 	unsigned			dma_burst_size;
-	struct dma_async_tx_descriptor 	*tx_desc;
-	struct dma_async_tx_descriptor	*rx_desc;
 };
 
 #define MAX_DMA_LEN		SZ_64K
