@@ -11,10 +11,21 @@
 #include <linux/i2c.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
+#include <rtdm/driver.h>
+#include <rtdm/rtdm.h>
+#include <linux/interrupt.h>
 
 #include "rpi-rtdm-codec-utils.h"
 
 #define CODEC_RST_GPIO  16
+#define TEST_GPIO_IN 12
+#define GPIO_TRIGGER_NONE		0x0 /* unspecified */
+#define GPIO_TRIGGER_EDGE_RISING	0x1
+#define GPIO_TRIGGER_EDGE_FALLING	0x2
+#define GPIO_TRIGGER_LEVEL_HIGH		0x4
+#define GPIO_TRIGGER_LEVEL_LOW		0x8
+#define GPIO_TRIGGER_MASK		0xf
+
 static struct i2c_adapter* i2c_device_adapter;
 static struct i2c_client* i2c_client_device;
 
@@ -123,7 +134,7 @@ static int config_clk_gen(struct i2c_client* i2c_client_dev) {
 static int rpi_rtdm_config_codec(struct i2c_client* i2c_client_dev) {
 	char cmd[2];
 	int ret;
-	//printk("i2c_init: i2c_client_dev for codec: %p \n", i2c_client_dev);
+
 	cmd[0] = PCM_DAC_CNTRL_TWO_REG;
 	cmd[1] = 0x00 | DAC_CHAN_0_1_DISABLED_MODE_MASK |
 			DAC_CHAN_2_3_DISABLED_MODE_MASK |
@@ -200,7 +211,7 @@ static int rpi_rtdm_config_codec(struct i2c_client* i2c_client_dev) {
 		printk("config_codec: i2c_master_send failed to send cmd to PCM_DAC_CNTRL_REG_TWO to power up dacs\n");
 		return ret;
 	}
-	//printk("config_codec: Codec configured successfully\n");
+
 	return 0;
 }
 
@@ -226,6 +237,81 @@ int rpi_rtdm_codec_init(void) {
 
 	if (rpi_rtdm_config_codec(i2c_client_device))
 		printk("i2c_init::config_codec failed\n");
+
+	return 0;
+}
+
+static rtdm_irq_t  bcm_rtdm_irq;
+
+int irq_handler(rtdm_irq_t *irq_handle)
+{
+  // We got IRQ !
+   rtdm_printk("RPI_GPIO RTDM, INterrupt !\n");
+
+  return RTDM_IRQ_HANDLED;
+}
+
+static int request_gpio_irq(unsigned int gpio, int trigger)
+{
+	int ret, irq_trigger, irq;
+
+	ret = gpio_request(gpio, "gpio-in");
+		if (ret) {
+			if (ret != -EPROBE_DEFER)
+				printk("can not request GPIO%d\n", gpio);
+			return ret;
+		}
+
+	ret = gpio_direction_input(gpio);
+	if (ret) {
+		printk("cannot set GPIO%d as input\n", gpio);
+		return ret;
+	}
+
+	gpio_export(gpio, true);
+	irq = gpio_to_irq(gpio);
+	if (irq < 0) {
+		printk("irq < 0 ! \n");
+		return -1;
+	}
+
+	irq_trigger = 0;
+	if (trigger & GPIO_TRIGGER_EDGE_RISING)
+		irq_trigger |= IRQ_TYPE_EDGE_RISING;
+	if (trigger & GPIO_TRIGGER_EDGE_FALLING)
+		irq_trigger |= IRQ_TYPE_EDGE_FALLING;
+	if (trigger & GPIO_TRIGGER_LEVEL_HIGH)
+		irq_trigger |= IRQ_TYPE_LEVEL_HIGH;
+	if (trigger & GPIO_TRIGGER_LEVEL_LOW)
+		irq_trigger |= IRQ_TYPE_LEVEL_LOW;
+
+	if (irq_trigger)
+		irq_set_irq_type(irq, irq_trigger);
+	
+	ret = rtdm_irq_request(&bcm_rtdm_irq, irq, irq_handler,
+			       0, "rt-gpio", THIS_MODULE->name);
+	if (ret) {
+		printk( "cannot request GPIO%d interrupt\n", gpio);
+		return ret;
+	}
+
+	rtdm_irq_enable(&bcm_rtdm_irq);
+	printk("GPIO RTDM irq setup successfully!\n");
+	return 0;
+}
+
+int rpi_rtdm_gpio_test(void) {
+	int ret;
+	request_gpio_irq(TEST_GPIO_IN, GPIO_TRIGGER_EDGE_RISING);
+
+	if ((ret = gpio_request(CODEC_RST_GPIO, "CODEC_RST")) < 0) {
+		printk("i2c_init: Failed to get CODEC_RST_GPIO\n");
+		return ret;
+	}
+	
+	gpio_direction_output(CODEC_RST_GPIO, 0);
+	msleep(50);
+	gpio_direction_output(CODEC_RST_GPIO, 1);
 	
 	//printk("i2c_init: i2c init successful\n");
 	return 0;

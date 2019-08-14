@@ -19,8 +19,8 @@
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
-
-
+#include <rtdm/driver.h>
+#include <rtdm/rtdm.h>
 
 
 /* RTDM headers */
@@ -30,7 +30,6 @@
 #include "rpi-rtdm-codec-utils.h"
 #include "rpi-rtdm-i2s.h"
 
-#define I2S_INTERRUPT		85
 #define RTDM_SUBCLASS_GPIO	0
 #define DEVICE_NAME		"rtdm_audio"
 #define RTAUDIO_PROFILE_VER	1
@@ -73,11 +72,14 @@ static struct rtdm_device rtdm_audio_device = {
 };
 
 
-
 static int audio_rtdm_driver_probe(struct platform_device *pdev) {
-	int ret;
+	int ret, i;
 
 	//printk("audio_rtdm: Audio RTDM driver starting init ...\n");
+	if (!realtime_core_enabled()) {
+		printk("realtime_core_enabled returned false ! \n");
+		return -ENODEV;
+	}
 
 	ret = rtdm_dev_register(&rtdm_audio_device);
 	if (ret) {
@@ -90,10 +92,12 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2c_init failed\n");
 		return -1;
 	} */
+
 	if (rpi_rtdm_i2s_init(pdev)) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2s_init failed\n");
 		return -1;
 	}
+
 	printk(KERN_INFO "audio_rtdm: driver initialized\n");
 	return 0;
 }
