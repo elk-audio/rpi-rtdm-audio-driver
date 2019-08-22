@@ -21,6 +21,8 @@
 #include <linux/scatterlist.h>
 #include <linux/io.h>
 #include <linux/dmaengine.h>
+#include <rtdm/driver.h>
+#include <rtdm/rtdm.h>
 
 #define RPI_I2S_IRQ_NUM 85
 
@@ -128,9 +130,12 @@ static inline void i2s_reg_read(void *base_addr, uint32_t reg_addr,
 struct i2s_transfer {
 	void			*tx_buf;
 	void			*rx_buf;
-	unsigned		len;
-	struct sg_table 	tx_sgt;
-	struct sg_table 	rx_sgt;
+	size_t			buffer_len;
+	size_t			period_len;
+/* 	struct sg_table 	tx_sgt;
+	struct sg_table 	rx_sgt; */
+	dma_addr_t 			tx_phys_addr;
+	dma_addr_t 			rx_phys_addr;
 	struct dma_async_tx_descriptor 	*tx_desc;
 	struct dma_async_tx_descriptor	*rx_desc;
 };
@@ -150,9 +155,15 @@ struct rpi_i2s_dev {
 	unsigned			addr_width;
 	unsigned			dma_burst_size;
 	int 				irq;
+	rtdm_task_t *i2s_task;
+	rtdm_event_t irq_event;
 };
 
 #define MAX_DMA_LEN		SZ_64K
 
 int rpi_rtdm_i2s_init(struct platform_device *pdev);
+void rpi_rtdm_i2s_exit(struct platform_device *pdev);
+
+
+
 #endif

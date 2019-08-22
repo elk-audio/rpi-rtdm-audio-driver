@@ -18,7 +18,7 @@
 #include "rpi-rtdm-codec-utils.h"
 
 #define CODEC_RST_GPIO  16
-#define TEST_GPIO_IN 12
+#define SIKA_CPLD_RST 4
 #define GPIO_TRIGGER_NONE		0x0 /* unspecified */
 #define GPIO_TRIGGER_EDGE_RISING	0x1
 #define GPIO_TRIGGER_EDGE_FALLING	0x2
@@ -155,8 +155,7 @@ static int rpi_rtdm_config_codec(struct i2c_client* i2c_client_dev) {
 	}
 	msleep(10);
 	cmd[0] = PCM_DAC_CNTRL_ONE_REG;
-	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK |
-			DAC_I2S_24_BIT_MODE_MASK;
+	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK | DAC_LJ_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
 		printk("config_codec: i2c_master_send failed to send cmd to PCM_DAC_CNTRL_ONE_REG\n");
 		return ret;
@@ -186,7 +185,7 @@ static int rpi_rtdm_config_codec(struct i2c_client* i2c_client_dev) {
 	*/
 	cmd[0] = PCM_ADC_CNTRL_ONE_REG;
 	cmd[1] = 0x00 | ADC_MASTER_MODE_512xFS |
-			ADC_I2S_24_BIT_MODE_MASK;
+			ADC_LJ_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
 		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CNTRL_ONE_REG\n");
 		return ret;
@@ -228,7 +227,11 @@ int rpi_rtdm_codec_init(void) {
 		printk("i2c_init: Failed to get CODEC_RST_GPIO\n");
 		return ret;
 	}
-	
+	if ((ret = gpio_request(SIKA_CPLD_RST, "SIKA_RST")) < 0) {
+		printk("i2c_init: Failed to get SIKA_RST\n");
+		return ret;
+	}
+	gpio_direction_output(SIKA_CPLD_RST, 0);
 	gpio_direction_output(CODEC_RST_GPIO, 0);
 	msleep(50);
 	gpio_direction_output(CODEC_RST_GPIO, 1);
@@ -300,7 +303,7 @@ static int request_gpio_irq(unsigned int gpio, int trigger)
 	return 0;
 }
 
-int rpi_rtdm_gpio_test(void) {
+/* int rpi_rtdm_gpio_test(void) {
 	int ret;
 	request_gpio_irq(TEST_GPIO_IN, GPIO_TRIGGER_EDGE_RISING);
 
@@ -308,14 +311,12 @@ int rpi_rtdm_gpio_test(void) {
 		printk("i2c_init: Failed to get CODEC_RST_GPIO\n");
 		return ret;
 	}
-	
 	gpio_direction_output(CODEC_RST_GPIO, 0);
 	msleep(50);
 	gpio_direction_output(CODEC_RST_GPIO, 1);
-	
-	//printk("i2c_init: i2c init successful\n");
+
 	return 0;
-}
+} */
 
 int rpi_rtdm_codec_exit(void) {
 	printk(KERN_INFO "i2c-exit: unregister i2c-client\n");

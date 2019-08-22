@@ -41,6 +41,7 @@ MODULE_LICENSE("GPL");
 struct audio_dev_context {
 	rtdm_event_t irq_event;
 	ipipe_spinlock_t lock;
+	struct rpi_i2s_dev *i2s_dev;
 };
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags) {
@@ -88,11 +89,11 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 		return ret;
 	}
 	
-	/* if (rpi_rtdm_codec_init()) {
+	if (rpi_rtdm_codec_init()) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2c_init failed\n");
 		return -1;
-	} */
-
+	}
+	msleep(200);
 	if (rpi_rtdm_i2s_init(pdev)) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2s_init failed\n");
 		return -1;
@@ -106,6 +107,7 @@ static int audio_rtdm_driver_remove(struct platform_device *pdev) {
 	printk(KERN_INFO "audio_rtdm: driver exiting...\n");
 	if (rpi_rtdm_codec_exit())
 		printk("i2c_exit failed\n");
+	rpi_rtdm_i2s_exit(pdev);
 	rtdm_dev_unregister(&rtdm_audio_device);
 	return 0;
 }

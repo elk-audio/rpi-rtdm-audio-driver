@@ -220,5 +220,5 @@
 
 extern int rpi_rtdm_codec_init(void);
 extern int rpi_rtdm_codec_exit(void);
-extern int rpi_rtdm_gpio_test(void);
+/* extern int rpi_rtdm_gpio_test(void); */
 #endif
