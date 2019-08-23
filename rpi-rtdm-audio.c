@@ -93,7 +93,7 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2c_init failed\n");
 		return -1;
 	}
-	msleep(200);
+	msleep(300);
 	if (rpi_rtdm_i2s_init(pdev)) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2s_init failed\n");
 		return -1;

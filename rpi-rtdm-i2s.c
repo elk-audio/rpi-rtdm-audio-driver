@@ -32,8 +32,8 @@
 
 #define DEVICE_NAME "rtdm_audio"
 
-#define DEFAULT_AUDIO_N_CHANNELS			2
-#define DEFAULT_AUDIO_N_FRAMES_PER_BUFFER		32
+#define DEFAULT_AUDIO_N_CHANNELS			8
+#define DEFAULT_AUDIO_N_FRAMES_PER_BUFFER		64
 #define NUM_OF_WORDS (DEFAULT_AUDIO_N_CHANNELS * \
 DEFAULT_AUDIO_N_FRAMES_PER_BUFFER)
 
@@ -68,19 +68,19 @@ static void i2s_loopback_task(void *ctx)
 		rtdm_event_wait(&dev->irq_event);
 		current_wakeup_ns = rtdm_clock_read_monotonic();
 
-		for (i = 0; i < NUM_OF_WORDS; i++) {
+		for (i = 0; i < NUM_OF_WORDS; i+=8) {
 				txbuf[i + pos] = rxbuf[i + pos];
-				/* txbuf[i + pos + 1] = rxbuf[i + pos + 1];
+				txbuf[i + pos + 1] = rxbuf[i + pos + 1];
 				txbuf[i + pos + 2] = rxbuf[i + pos + 2];
 				txbuf[i + pos + 3] = rxbuf[i + pos + 3];
 				txbuf[i + pos + 4] = rxbuf[i + pos + 4];
 				txbuf[i + pos + 5] = rxbuf[i + pos + 5];
-				txbuf[i + pos + 6] = rxbuf[i + pos + 0];
-				txbuf[i + pos + 7] = rxbuf[i + pos + 1]; */
+				txbuf[i + pos + 6] = rxbuf[i + pos + 4];
+				txbuf[i + pos + 7] = rxbuf[i + pos + 5];
+				
 
-			/* if(!prev_wakeup_ns) {
-
-				raw_printk(" 0x%08X\n",rxbuf[i  + pos]);
+			/* if(i2s_interrupts == 10000) {
+				printk(" 0x%08X\n",rxbuf[i  + pos]);
 			} */
 		}
 
@@ -171,13 +171,34 @@ static int rpi_i2s_setup_clock(struct rpi_i2s_dev *dev)
 
 static void rpi_rtdm_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
 {
-	uint32_t mask;
+	uint32_t mask, val, discarded = 0;
+	int32_t tmp[9], samples[2] = {0xff, 0xff};
 	wmb();
 	mask = BCM2835_I2S_RXON | BCM2835_I2S_TXON;
-
+ 
 	if (cmd == RPI_I2S_START_CMD) {
 		i2s_reg_update_bits(dev->base_addr,
 			BCM2835_I2S_CS_A_REG, mask, mask);
+
+		while (samples[0] != 0 || samples[1] != 0) {
+			i2s_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG,
+					 &val);
+			if (val & BCM2835_I2S_RXD) {
+				i2s_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG,
+					 0x00);
+					 
+				samples[1] = samples[0];
+				i2s_reg_read(dev->base_addr, BCM2835_I2S_FIFO_A_REG,
+					 &samples[0]);
+					 //samples[0] &= 0xffffff00;
+					 tmp[discarded] = samples[0];
+					 discarded++;
+			}
+		}
+		printk("rpi_rtdm_i2s_start_stop: %d samples discarded\n",discarded);
+		for ( val = 0; val < discarded; val++)
+			printk("%x\n",tmp[val]);
+
 	}
 	else {
 		i2s_reg_update_bits(dev->base_addr,
@@ -361,7 +382,7 @@ static void rpi_rtdm_configure_i2s(struct rpi_i2s_dev * dev)
 
 	i2s_reg_update_bits(dev->base_addr, BCM2835_I2S_DREQ_A_REG,
 			  BCM2835_I2S_TX_PANIC(8)
-			| BCM2835_I2S_RX_PANIC(48)
+			| BCM2835_I2S_RX_PANIC(32)
 			| BCM2835_I2S_TX(16)
 			| BCM2835_I2S_RX(16), 0xffffffff);
 }
@@ -498,7 +519,7 @@ int rpi_rtdm_i2s_init(struct platform_device *pdev)
 		tmp[i] = 0;
 	}
 	
-	for (i =0; i < 16; i++)
+	for (i =0; i < 24; i++)
 		i2s_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
 
 	msleep(10);

@@ -155,7 +155,7 @@ static int rpi_rtdm_config_codec(struct i2c_client* i2c_client_dev) {
 	}
 	msleep(10);
 	cmd[0] = PCM_DAC_CNTRL_ONE_REG;
-	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK | DAC_LJ_24_BIT_TDM_MODE_MASK;
+	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK | DAC_I2S_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
 		printk("config_codec: i2c_master_send failed to send cmd to PCM_DAC_CNTRL_ONE_REG\n");
 		return ret;
@@ -185,7 +185,7 @@ static int rpi_rtdm_config_codec(struct i2c_client* i2c_client_dev) {
 	*/
 	cmd[0] = PCM_ADC_CNTRL_ONE_REG;
 	cmd[1] = 0x00 | ADC_MASTER_MODE_512xFS |
-			ADC_LJ_24_BIT_TDM_MODE_MASK;
+			ADC_I2S_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
 		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CNTRL_ONE_REG\n");
 		return ret;
