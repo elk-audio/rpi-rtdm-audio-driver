@@ -33,13 +33,12 @@
 #define DEFAULT_AUDIO_N_FRAMES_PER_BUFFER		64
 #define NUM_OF_WORDS (DEFAULT_AUDIO_N_CHANNELS * \
 DEFAULT_AUDIO_N_FRAMES_PER_BUFFER)
+#define NUM_OF_PAGES					4
 
 static unsigned long i2s_interrupts = 0;
 module_param(i2s_interrupts, ulong, 0644);
 
 static struct rpi_i2s_dev *rpi_device_i2s;
-static struct i2s_transfer *drv_i2s_transfer;
-static dma_addr_t dummy_phys_addr;
 static rtdm_irq_t  i2s_rtdm_irq;
 
 static void i2s_loopback_task(void *ctx)
@@ -48,8 +47,9 @@ static void i2s_loopback_task(void *ctx)
 	int i;
 	static int pos = 0;
 	static int *txbuf, *rxbuf;
-	txbuf = (int *) drv_i2s_transfer->tx_buf;
-	rxbuf = (int *) drv_i2s_transfer->rx_buf;
+	struct i2s_buffers_info *i2s_buffer = dev->buffer;
+	txbuf = (int *) i2s_buffer->tx_buf;
+	rxbuf = (int *) i2s_buffer->rx_buf;
 	printk("i2s_loopback_task: started\n");
 	while(!rtdm_task_should_stop()){
 		rtdm_event_wait(&dev->irq_event);
@@ -129,20 +129,6 @@ static int bcm2835_i2s_intr(rtdm_irq_t *irqh)
 	return RTDM_IRQ_HANDLED;
 }
 
-static int bcm2835_i2s_setup_clock(struct rpi_i2s_dev *dev)
-{
-	int ret;
-	unsigned long bclk_rate = (48000 * 64);
-
-	ret = clk_set_rate(dev->clk, bclk_rate);
-	if (ret)
-		return ret;
-	dev->clk_rate = bclk_rate;
-	clk_prepare_enable(dev->clk);
-	dev->clk_prepared = true;
-	return 0;
-}
-
 static void bcm2835_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
 {
 	uint32_t mask, val, discarded = 0;
@@ -164,7 +150,6 @@ static void bcm2835_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
 				samples[1] = samples[0];
 				rpi_reg_read(dev->base_addr, BCM2835_I2S_FIFO_A_REG,
 					 &samples[0]);
-					 //samples[0] &= 0xffffff00;
 					 tmp[discarded] = samples[0];
 					 discarded++;
 			}
@@ -191,12 +176,13 @@ static void bcm2835_i2s_dma_callback(void *data)
 
 static struct dma_async_tx_descriptor *
 bcm2835_i2s_dma_prepare_cyclic(struct rpi_i2s_dev *dev,
-			enum dma_transfer_direction dir, struct i2s_transfer *transfer)
+			enum dma_transfer_direction dir)
 {
 	struct dma_slave_config cfg;
 	struct dma_chan *chan;
 	int  flags;
 	struct dma_async_tx_descriptor * desc;
+	struct i2s_buffers_info *i2s_buffer = dev->buffer;
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.direction = dir;
@@ -206,64 +192,59 @@ bcm2835_i2s_dma_prepare_cyclic(struct rpi_i2s_dev *dev,
 		cfg.dst_addr_width = dev->addr_width;
 		cfg.dst_maxburst = dev->dma_burst_size;
 		chan = dev->dma_tx;
-		flags = /* DMA_CTRL_REUSE | */ DMA_PREP_INTERRUPT | DMA_CTRL_ACK;
+		flags = DMA_PREP_INTERRUPT | DMA_CTRL_ACK;
 
 		if (dmaengine_slave_config(chan, &cfg)) {
 			dev_warn(dev->dev, "DMA slave config failed\n");
 			return NULL;
 		}
-		desc = dmaengine_prep_dma_cyclic(chan, transfer->tx_phys_addr, transfer->buffer_len, transfer->period_len, dir,
+		desc = dmaengine_prep_dma_cyclic(chan, i2s_buffer->tx_phys_addr, i2s_buffer->buffer_len, i2s_buffer->period_len, dir,
 				       flags);
 	} else {
 		cfg.src_addr = dev->fifo_dma_addr;
 		cfg.src_addr_width = dev->addr_width;
 		cfg.src_maxburst = dev->dma_burst_size;
 		chan = dev->dma_rx;
-		flags = /* DMA_CTRL_REUSE | */ DMA_PREP_INTERRUPT | DMA_CTRL_ACK;
+		flags = DMA_PREP_INTERRUPT | DMA_CTRL_ACK;
 
 		if (dmaengine_slave_config(chan, &cfg)) {
 			dev_warn(dev->dev, "DMA slave config failed\n");
 			return NULL;
 		}
-		desc = dmaengine_prep_dma_cyclic(chan, transfer->rx_phys_addr, transfer->buffer_len, transfer->period_len, dir,
+		desc = dmaengine_prep_dma_cyclic(chan, i2s_buffer->rx_phys_addr, i2s_buffer->buffer_len, i2s_buffer->period_len, dir,
 				       flags);
 	}
 	return desc;
 }
 
-static int bcm2835_i2s_dma_prepare(struct rpi_i2s_dev *dev,
-		struct i2s_transfer *transfer)
+static int bcm2835_i2s_dma_prepare(struct rpi_i2s_dev *dev)
 {
 	int err;
-
-	transfer->tx_desc = bcm2835_i2s_dma_prepare_cyclic(dev, DMA_MEM_TO_DEV,
-	transfer);
-	if (!transfer->tx_desc) {
+	dev->tx_desc = bcm2835_i2s_dma_prepare_cyclic(dev, DMA_MEM_TO_DEV);
+	if (!dev->tx_desc) {
 		dev_err(dev->dev,
 			"failed to get DMA TX descriptor\n");
 		err = -EBUSY;
 		return err;
 	}
 
-	transfer->rx_desc = bcm2835_i2s_dma_prepare_cyclic(dev, DMA_DEV_TO_MEM,
-	transfer);
-	if (!transfer->rx_desc) {
+	dev->rx_desc = bcm2835_i2s_dma_prepare_cyclic(dev, DMA_DEV_TO_MEM);
+	if (!dev->rx_desc) {
 		dev_err(dev->dev,
 			"failed to get DMA RX descriptor\n");
 		err = -EBUSY;
 		dmaengine_terminate_async(dev->dma_tx);
 		return err;
 	}
-	transfer->rx_desc->callback = bcm2835_i2s_dma_callback;
-	transfer->rx_desc->callback_param = dev;
+	dev->rx_desc->callback = bcm2835_i2s_dma_callback;
+	dev->rx_desc->callback_param = dev;
 	return 0;
 }
 
-static void bcm2835_i2s_start_dma(struct rpi_i2s_dev *dev,
-				struct i2s_transfer *transfer)
+static void bcm2835_i2s_start_dma(struct rpi_i2s_dev *dev)
 {
-	dmaengine_submit(transfer->rx_desc);
-	dmaengine_submit(transfer->tx_desc);
+	dmaengine_submit(dev->rx_desc);
+	dmaengine_submit(dev->tx_desc);
 
 	dma_async_issue_pending(dev->dma_rx);
 	dma_async_issue_pending(dev->dma_tx);
@@ -391,9 +372,9 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	struct resource *mem_resource;
 	void __iomem *base;
 	const __be32 *addr;
-	dma_addr_t dma_base;
+	dma_addr_t dma_base, dummy_phys_addr;
 	uint32_t val;
-	void *coherent_mem;
+	struct i2s_buffers_info *i2s_buffer;
 	int *tmp;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev),
@@ -401,13 +382,6 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	if (!dev)
 		return -ENOMEM;
 
-	dev->clk_prepared = false;
-	dev->clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(dev->clk)) {
-		dev_err(&pdev->dev, "could not get clk: %ld\n",
-			PTR_ERR(dev->clk));
-		return PTR_ERR(dev->clk);
-	}
 	dev->irq = RPI_I2S_IRQ_NUM;
 	rpi_device_i2s = dev;
 
@@ -447,43 +421,37 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	if (bcm2835_i2s_dma_setup(dev))
 		return -ENODEV;
 
-	coherent_mem = dma_zalloc_coherent(dev->dma_rx->device->dev,
-				4 * PAGE_SIZE, &dummy_phys_addr, GFP_KERNEL);
-	if (!coherent_mem) {
+	i2s_buffer = kcalloc(1, sizeof(struct i2s_buffers_info),
+		GFP_KERNEL);
+
+	if (!i2s_buffer) {
+		printk("bcm2835_i2s_init: couldn't allocate i2s_buffer\n");
+		return -ENOMEM;
+	}
+	dev->buffer = i2s_buffer;
+	i2s_buffer->rx_buf = dma_zalloc_coherent(dev->dma_rx->device->dev,
+				NUM_OF_PAGES * PAGE_SIZE, &dummy_phys_addr,
+				GFP_KERNEL);
+	if (!i2s_buffer->rx_buf ) {
 		printk("bcm2835_i2s_init: couldn't allocate coherent_mem\n");
 		return -ENOMEM;
 	}
+	i2s_buffer->rx_phys_addr = dummy_phys_addr;
+	i2s_buffer->period_len = NUM_OF_WORDS * sizeof(uint32_t);
+	i2s_buffer->buffer_len = 2 * i2s_buffer->period_len;
+	i2s_buffer->tx_buf = i2s_buffer->rx_buf +
+			i2s_buffer->buffer_len;
+	i2s_buffer->tx_phys_addr = dummy_phys_addr + i2s_buffer->buffer_len;
 
-	
-	drv_i2s_transfer = kcalloc(1, sizeof(struct i2s_transfer),
-		GFP_KERNEL);
-
-	if (!drv_i2s_transfer) {
-		printk("bcm2835_i2s_init: couldn't allocate drv_i2s_transfer\n");
-		return -ENOMEM;
-	}
-
-	drv_i2s_transfer->rx_buf = coherent_mem;
-	drv_i2s_transfer->rx_phys_addr = dummy_phys_addr;
-	drv_i2s_transfer->period_len = NUM_OF_WORDS * sizeof(uint32_t);
-	drv_i2s_transfer->buffer_len = 2 * drv_i2s_transfer->period_len;
-	drv_i2s_transfer->tx_buf = drv_i2s_transfer->rx_buf +
-			drv_i2s_transfer->buffer_len;
-	drv_i2s_transfer->tx_phys_addr = dummy_phys_addr + drv_i2s_transfer->buffer_len;
-
-	/* printk("drv_i2s_transfer->buffer_len = %d \n drv_i2s_transfer->period_len = %d\n",drv_i2s_transfer->buffer_len,drv_i2s_transfer->period_len);
-	printk("rx_buf = %p and tx_buf = %p, rx_phys_addr = %p tx_phys_addr = %p fifo_dma_addr = %p\n",drv_i2s_transfer->rx_buf,drv_i2s_transfer->tx_buf, drv_i2s_transfer->rx_phys_addr, drv_i2s_transfer->tx_phys_addr, dev->fifo_dma_addr); */
-
-	ret = bcm2835_i2s_dma_prepare(dev, drv_i2s_transfer);
+	ret = bcm2835_i2s_dma_prepare(dev);
 	if (ret)
 		printk("bcm2835_i2s_dma_prepare failed!\n");
 
-	bcm2835_i2s_setup_clock(dev);
 	bcm2835_i2s_enable(dev);
 	/* Clear the fifos */
 	bcm2835_i2s_clear_fifos(dev, true, true);
 
-	tmp = (int *) drv_i2s_transfer->tx_buf;
+	tmp = (int *) i2s_buffer->tx_buf;
 
 	for (i = 0; i < NUM_OF_WORDS * 2; i++) {
 		tmp[i] = 0;
@@ -511,7 +479,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	rpi_reg_read(dev->base_addr, BCM2835_I2S_GRAY_REG, &val);
 	printk("bcm2835_i2s_init: BCM2835_I2S_GRAY_REG = 0x%08X\n",val);
 
-	bcm2835_i2s_start_dma(dev, drv_i2s_transfer);
+	bcm2835_i2s_start_dma(dev);
 
 	msleep(500);
 	ret = rtdm_task_init(dev->i2s_task,
@@ -531,13 +499,14 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 
 void bcm2835_i2s_exit(struct platform_device *pdev)
 {
+	struct i2s_buffers_info *i2s_buffer = rpi_device_i2s->buffer;
 	rtdm_irq_free(&i2s_rtdm_irq);
 	devm_iounmap(&pdev->dev, (void *)rpi_device_i2s->base_addr);
 	dma_free_coherent(rpi_device_i2s->dma_rx->device->dev,
-				4 * PAGE_SIZE, drv_i2s_transfer->rx_buf, 
-				dummy_phys_addr);
+				4 * PAGE_SIZE, i2s_buffer->rx_buf,
+				i2s_buffer->rx_phys_addr);
 	dma_release_channel(rpi_device_i2s->dma_tx);
 	dma_release_channel(rpi_device_i2s->dma_rx);
-	kfree(drv_i2s_transfer);
+	kfree(i2s_buffer);
 	devm_kfree(&pdev->dev, (void *)rpi_device_i2s);
 }

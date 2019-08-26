@@ -129,17 +129,13 @@ static inline void rpi_reg_read(void *base_addr, uint32_t reg_addr,
 	//printk("i2s_reg_read:  reg ptr = %p\n",reg);
 }
 
-struct i2s_transfer {
+struct i2s_buffers_info {
 	void			*tx_buf;
 	void			*rx_buf;
 	size_t			buffer_len;
 	size_t			period_len;
-/* 	struct sg_table 	tx_sgt;
-	struct sg_table 	rx_sgt; */
 	dma_addr_t 			tx_phys_addr;
 	dma_addr_t 			rx_phys_addr;
-	struct dma_async_tx_descriptor 	*tx_desc;
-	struct dma_async_tx_descriptor	*rx_desc;
 };
 
 /* General device struct */
@@ -148,14 +144,12 @@ struct rpi_i2s_dev {
 	void __iomem			*base_addr;
 	struct dma_chan			*dma_tx;
 	struct dma_chan			*dma_rx;
-	ipipe_spinlock_t 		lock;
-	struct clk			*clk;
-	bool				clk_prepared;
-	int				clk_rate;
-	struct i2s_transfer		*current_transfer;
+	struct dma_async_tx_descriptor 	*tx_desc;
+	struct dma_async_tx_descriptor	*rx_desc;
 	dma_addr_t			fifo_dma_addr;
 	unsigned			addr_width;
 	unsigned			dma_burst_size;
+	struct i2s_buffers_info		*buffer;
 	int 				irq;
 	rtdm_task_t *i2s_task;
 	rtdm_event_t irq_event;
