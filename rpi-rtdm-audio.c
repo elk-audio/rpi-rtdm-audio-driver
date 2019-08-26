@@ -27,8 +27,8 @@
 #include <rtdm/driver.h>
 #include <rtdm/rtdm.h>
 
-#include "rpi-rtdm-codec-utils.h"
-#include "rpi-rtdm-i2s.h"
+#include "rpi-pcm3168a.h"
+#include "rpi-bcm2835-i2s.h"
 
 #define RTDM_SUBCLASS_GPIO	0
 #define DEVICE_NAME		"rtdm_audio"
@@ -74,7 +74,7 @@ static struct rtdm_device rtdm_audio_device = {
 
 
 static int audio_rtdm_driver_probe(struct platform_device *pdev) {
-	int ret, i;
+	int ret;
 
 	//printk("audio_rtdm: Audio RTDM driver starting init ...\n");
 	if (!realtime_core_enabled()) {
@@ -89,12 +89,12 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 		return ret;
 	}
 	
-	if (rpi_rtdm_codec_init()) {
+	if (rpi_pcm3168a_codec_init()) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2c_init failed\n");
 		return -1;
 	}
 	msleep(300);
-	if (rpi_rtdm_i2s_init(pdev)) {
+	if (bcm2835_i2s_init(pdev)) {
 		printk("audio_rtdm_driver_probe: rpi_rtdm_i2s_init failed\n");
 		return -1;
 	}
@@ -105,9 +105,9 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 
 static int audio_rtdm_driver_remove(struct platform_device *pdev) {
 	printk(KERN_INFO "audio_rtdm: driver exiting...\n");
-	if (rpi_rtdm_codec_exit())
+	if (rpi_pcm3168a_codec_exit())
 		printk("i2c_exit failed\n");
-	rpi_rtdm_i2s_exit(pdev);
+	bcm2835_i2s_exit(pdev);
 	rtdm_dev_unregister(&rtdm_audio_device);
 	return 0;
 }

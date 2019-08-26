@@ -27,6 +27,8 @@
 #define RPI_I2S_IRQ_NUM 85
 
 #define BCM2835_I2S_PERIPHERAL_BASE	0x20203000
+#define RPI_I2S_STOP_CMD 0
+#define RPI_I2S_START_CMD 1
 
 /* I2S registers */
 #define BCM2835_I2S_CS_A_REG		0x00
@@ -100,7 +102,7 @@
 /* Frame length register is 10 bit, maximum length 1024 */
 #define BCM2835_I2S_MAX_FRAME_LENGTH	1024
 
-static inline void i2s_reg_write(void *base_addr, uint32_t reg_addr,
+static inline void rpi_reg_write(void *base_addr, uint32_t reg_addr,
 				uint32_t value)
 {
 	uint32_t *reg = base_addr + reg_addr;
@@ -108,7 +110,7 @@ static inline void i2s_reg_write(void *base_addr, uint32_t reg_addr,
 	*reg = value;
 }
 
-static inline void i2s_reg_update_bits(void *base_addr, uint32_t reg_addr,
+static inline void rpi_reg_update_bits(void *base_addr, uint32_t reg_addr,
 				uint32_t mask, uint32_t value)
 {
 	uint32_t *reg = base_addr + reg_addr;
@@ -117,7 +119,7 @@ static inline void i2s_reg_update_bits(void *base_addr, uint32_t reg_addr,
 	*reg |= (mask & value);
 }
 
-static inline void i2s_reg_read(void *base_addr, uint32_t reg_addr,
+static inline void rpi_reg_read(void *base_addr, uint32_t reg_addr,
 			uint32_t *value)
 {
 	uint32_t *reg = base_addr + reg_addr;
@@ -161,8 +163,8 @@ struct rpi_i2s_dev {
 
 #define MAX_DMA_LEN		SZ_64K
 
-int rpi_rtdm_i2s_init(struct platform_device *pdev);
-void rpi_rtdm_i2s_exit(struct platform_device *pdev);
+int bcm2835_i2s_init(struct platform_device *pdev);
+void bcm2835_i2s_exit(struct platform_device *pdev);
 
 
 

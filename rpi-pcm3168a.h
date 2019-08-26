@@ -218,7 +218,7 @@
 #define ADC_ATTEN_SPEED_FAST_MASK			0x00
 #define ADC_ATTEN_SPEED_SLOW_MASK			0x40
 
-extern int rpi_rtdm_codec_init(void);
-extern int rpi_rtdm_codec_exit(void);
-/* extern int rpi_rtdm_gpio_test(void); */
+extern int rpi_pcm3168a_codec_init(void);
+extern int rpi_pcm3168a_codec_exit(void);
+
 #endif
