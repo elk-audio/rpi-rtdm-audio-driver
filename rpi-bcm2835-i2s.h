@@ -8,8 +8,8 @@
  * @copyright MIND Music Labs (c) 2019
  * 
  */
-#ifndef RPI_RTDM_I2S_H
-#define RPI_RTDM_I2S_H
+#ifndef RPI_BCM2835_I2S_H
+#define RPI_BCM2835_I2S_H
 
 #include <linux/bitops.h>
 #include <linux/clk.h>
@@ -24,11 +24,14 @@
 #include <rtdm/driver.h>
 #include <rtdm/rtdm.h>
 
-#define RPI_I2S_IRQ_NUM 85
+#define BCM2835_I2S_IRQ_NUM 85
 
 #define BCM2835_I2S_PERIPHERAL_BASE	0x20203000
-#define RPI_I2S_STOP_CMD 0
-#define RPI_I2S_START_CMD 1
+#define BCM2835_I2S_STOP_CMD 		0
+#define BCM2835_I2S_START_CMD 		1
+#define BCM2835_DMA_THR			16
+#define BCM2835_DMA_TX_PANIC_THR	8
+#define BCM2835_DMA_RX_PANIC_THR	32
 
 /* I2S registers */
 #define BCM2835_I2S_CS_A_REG		0x00
@@ -136,6 +139,8 @@ struct i2s_buffers_info {
 	size_t			period_len;
 	dma_addr_t 			tx_phys_addr;
 	dma_addr_t 			rx_phys_addr;
+	struct sg_table 	tx_sgt;
+	struct sg_table 	rx_sgt;
 };
 
 /* General device struct */
@@ -151,15 +156,17 @@ struct rpi_i2s_dev {
 	unsigned			dma_burst_size;
 	struct i2s_buffers_info		*buffer;
 	int 				irq;
-	rtdm_task_t *i2s_task;
-	rtdm_event_t irq_event;
+	rtdm_event_t 			irq_event;
 };
 
 #define MAX_DMA_LEN		SZ_64K
 
 int bcm2835_i2s_init(struct platform_device *pdev);
 void bcm2835_i2s_exit(struct platform_device *pdev);
-
-
+void bcm2835_i2s_clear_fifos(struct rpi_i2s_dev *dev,
+				    bool tx, bool rx);
+void bcm2835_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd);
+void bcm2835_i2s_enable(struct rpi_i2s_dev *dev);
+int bcm28835_i2s_prepare_and_submit(struct rpi_i2s_dev *dev);
 
 #endif

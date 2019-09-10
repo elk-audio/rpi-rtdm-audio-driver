@@ -19,12 +19,6 @@
 
 #define CODEC_RST_GPIO  16
 #define SIKA_CPLD_RST 4
-#define GPIO_TRIGGER_NONE		0x0 /* unspecified */
-#define GPIO_TRIGGER_EDGE_RISING	0x1
-#define GPIO_TRIGGER_EDGE_FALLING	0x2
-#define GPIO_TRIGGER_LEVEL_HIGH		0x4
-#define GPIO_TRIGGER_LEVEL_LOW		0x8
-#define GPIO_TRIGGER_MASK		0xf
 
 static struct i2c_adapter* i2c_device_adapter;
 static struct i2c_client* i2c_device_client;
@@ -237,7 +231,6 @@ int rpi_pcm3168a_codec_init(void) {
 
 	if (rpi_pcm3168a_config_codec(i2c_device_client))
 		printk("i2c_init::config_codec failed\n");
-
 	return 0;
 }
 
