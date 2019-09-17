@@ -1,7 +1,7 @@
 obj-m += audio_rtdm.o
 audio_rtdm-objs := rpi-rtdm-audio.o rpi-pcm3168a.o rpi-bcm2835-i2s.o
 all:
-	$(MAKE) ARCH=arm CROSS_COMPILE=${CROSS_COMPILE} -C /home/nitin/work/rpi/raspi/rpi-xenomai M=$(PWD) modules
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=${CROSS_COMPILE} -C $(KERNEL_PATH) M=$(PWD) modules
 
 clean:
 	$(MAKE) -C $(KERNEL_PATH) M=$(PWD) clean

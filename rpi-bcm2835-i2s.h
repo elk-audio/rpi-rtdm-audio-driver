@@ -126,25 +126,21 @@ static inline void rpi_reg_read(void *base_addr, uint32_t reg_addr,
 			uint32_t *value)
 {
 	uint32_t *reg = base_addr + reg_addr;
-	wmb();
-	*value = *reg;
 	rmb();
-	//printk("i2s_reg_read:  reg ptr = %p\n",reg);
+	*value = *reg;
 }
 
-struct i2s_buffers_info {
+struct rpi_buffers_info {
 	void			*tx_buf;
 	void			*rx_buf;
 	size_t			buffer_len;
 	size_t			period_len;
 	dma_addr_t 			tx_phys_addr;
 	dma_addr_t 			rx_phys_addr;
-	struct sg_table 	tx_sgt;
-	struct sg_table 	rx_sgt;
 };
 
 /* General device struct */
-struct rpi_i2s_dev {
+struct rpi_audio_driver {
 	struct device			*dev;
 	void __iomem			*base_addr;
 	struct dma_chan			*dma_tx;
@@ -154,19 +150,19 @@ struct rpi_i2s_dev {
 	dma_addr_t			fifo_dma_addr;
 	unsigned			addr_width;
 	unsigned			dma_burst_size;
-	struct i2s_buffers_info		*buffer;
-	int 				irq;
+	struct rpi_buffers_info		*buffer;
 	rtdm_event_t 			irq_event;
+	unsigned			wait_flag;
+	unsigned			buffer_idx;
+	uint64_t			kinterrupts;
 };
 
 #define MAX_DMA_LEN		SZ_64K
 
 int bcm2835_i2s_init(struct platform_device *pdev);
 void bcm2835_i2s_exit(struct platform_device *pdev);
-void bcm2835_i2s_clear_fifos(struct rpi_i2s_dev *dev,
+void bcm2835_i2s_clear_fifos(struct rpi_audio_driver *dev,
 				    bool tx, bool rx);
-void bcm2835_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd);
-void bcm2835_i2s_enable(struct rpi_i2s_dev *dev);
-int bcm28835_i2s_prepare_and_submit(struct rpi_i2s_dev *dev);
+void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd);
 
 #endif

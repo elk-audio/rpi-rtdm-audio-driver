@@ -30,13 +30,12 @@
 #include "rpi-bcm2835-i2s.h"
 #include "rpi-rtdm-audio.h"
 
-struct rpi_i2s_dev *rpi_device_i2s;
-static rtdm_irq_t  i2s_rtdm_irq;
+struct rpi_audio_driver *rpi_device_i2s;
 
 extern dma_cookie_t cookie_tx;
 extern dma_cookie_t cookie_rx;
 
-void bcm2835_i2s_clear_fifos(struct rpi_i2s_dev *dev,
+void bcm2835_i2s_clear_fifos(struct rpi_audio_driver *dev,
 				    bool tx, bool rx)
 {
 	uint32_t csreg, sync;
@@ -82,21 +81,7 @@ void bcm2835_i2s_clear_fifos(struct rpi_i2s_dev *dev,
 			BCM2835_I2S_RXON | BCM2835_I2S_TXON, i2s_active_state);
 }
 
-static int bcm2835_i2s_intr(rtdm_irq_t *irqh)
-{
-	struct rpi_i2s_dev *dev = rtdm_irq_get_arg(irqh, struct rpi_i2s_dev);
-	uint32_t val;
-
-	rpi_reg_read(dev->base_addr, BCM2835_I2S_INTSTC_A_REG, &val);
-	bcm2835_i2s_clear_fifos(dev, true, true);
-	rpi_reg_write(dev->base_addr, BCM2835_I2S_INTSTC_A_REG,
-		BCM2835_I2S_INT_TXERR | BCM2835_I2S_INT_RXERR);
-	printk("bcm2835_i2s_intr: BCM2835_I2S_INTSTC_A_REG = 0x%08X\n",val);
-
-	return RTDM_IRQ_HANDLED;
-}
-
-void bcm2835_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
+void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd)
 {
 	uint32_t mask, val, discarded = 0;
 	int32_t tmp[9], samples[2] = {0xff, 0xff};
@@ -113,10 +98,11 @@ void bcm2835_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
 			rpi_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG,
 					 &val);
 			if (val & BCM2835_I2S_RXD) {
+				wmb();
 				rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG,
 					 0x00);
-					 
 				samples[1] = samples[0];
+				rmb();
 				rpi_reg_read(dev->base_addr, BCM2835_I2S_FIFO_A_REG,
 					 &samples[0]);
 					 tmp[discarded] = samples[0];
@@ -124,8 +110,8 @@ void bcm2835_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
 			}
 		}
 		printk("bcm2835_i2s_start_stop: %d samples discarded\n",discarded);
-		for ( val = 0; val < discarded; val++)
-			printk("%x\n",tmp[val]);
+		/* for ( val = 0; val < discarded; val++)
+			printk("%x\n",tmp[val]); */
 
 	}
 	else {
@@ -136,24 +122,26 @@ void bcm2835_i2s_start_stop(struct rpi_i2s_dev *dev, int cmd)
 
 static void bcm2835_i2s_dma_callback(void *data)
 {
-	struct rpi_i2s_dev *dev = data;
-	uint32_t val;
-	rpi_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG, &val);
-	rtdm_event_signal(&dev->irq_event);
-	if(val & (BCM2835_I2S_CS_RXERR | BCM2835_I2S_CS_TXERR)) {
-		printk("BCM2835_I2S_CS_A_REG = %08X\n",val);
+	struct rpi_audio_driver *dev = data;
+	dev->kinterrupts++;
+	if (!dev->wait_flag) {
+		dev->buffer_idx = ~(dev->buffer_idx) &
+						 0x00000001;
+	} else
+	{
+		rtdm_event_signal(&dev->irq_event);
 	}
 }
 
 static struct dma_async_tx_descriptor *
-bcm2835_i2s_dma_prepare_cyclic(struct rpi_i2s_dev *dev,
+bcm2835_i2s_dma_prepare_cyclic(struct rpi_audio_driver *dev,
 			enum dma_transfer_direction dir)
 {
 	struct dma_slave_config cfg;
 	struct dma_chan *chan;
 	int  flags;
 	struct dma_async_tx_descriptor * desc;
-	struct i2s_buffers_info *i2s_buffer = dev->buffer;
+	struct rpi_buffers_info *audio_buffers = dev->buffer;
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.direction = dir;
@@ -169,7 +157,7 @@ bcm2835_i2s_dma_prepare_cyclic(struct rpi_i2s_dev *dev,
 			dev_warn(dev->dev, "DMA slave config failed\n");
 			return NULL;
 		}
-		desc = dmaengine_prep_dma_cyclic(chan, i2s_buffer->tx_phys_addr,i2s_buffer->buffer_len, i2s_buffer->period_len, dir,
+		desc = dmaengine_prep_dma_cyclic(chan, audio_buffers->tx_phys_addr,audio_buffers->buffer_len, audio_buffers->period_len, dir,
 				       flags);
 	} else {
 		cfg.src_addr = dev->fifo_dma_addr;
@@ -182,13 +170,13 @@ bcm2835_i2s_dma_prepare_cyclic(struct rpi_i2s_dev *dev,
 			dev_warn(dev->dev, "DMA slave config failed\n");
 			return NULL;
 		}
-		desc = dmaengine_prep_dma_cyclic(chan, i2s_buffer->rx_phys_addr,i2s_buffer->buffer_len, i2s_buffer->period_len, dir,
+		desc = dmaengine_prep_dma_cyclic(chan, audio_buffers->rx_phys_addr,audio_buffers->buffer_len, audio_buffers->period_len, dir,
 				       flags);
 	}
 	return desc;
 }
 
-static int bcm2835_i2s_dma_prepare(struct rpi_i2s_dev *dev)
+static int bcm2835_i2s_dma_prepare(struct rpi_audio_driver *dev)
 {
 	int err;
 	dev->tx_desc = bcm2835_i2s_dma_prepare_cyclic(dev, DMA_MEM_TO_DEV);
@@ -212,7 +200,7 @@ static int bcm2835_i2s_dma_prepare(struct rpi_i2s_dev *dev)
 	return 0;
 }
 
-static void bcm2835_i2s_submit_dma(struct rpi_i2s_dev *dev)
+static void bcm2835_i2s_submit_dma(struct rpi_audio_driver *dev)
 {
 	cookie_rx = dmaengine_submit(dev->rx_desc);
 	cookie_tx = dmaengine_submit(dev->tx_desc);
@@ -221,7 +209,7 @@ static void bcm2835_i2s_submit_dma(struct rpi_i2s_dev *dev)
 	dma_async_issue_pending(dev->dma_tx);
 }
 
-static int bcm2835_i2s_dma_setup(struct rpi_i2s_dev *rpi_dev)
+static int bcm2835_i2s_dma_setup(struct rpi_audio_driver *rpi_dev)
 {
 	struct device *dev = (struct device*) rpi_dev->dev;
 
@@ -241,7 +229,7 @@ static int bcm2835_i2s_dma_setup(struct rpi_i2s_dev *rpi_dev)
 	return 0;
 }
 
-static void bcm2835_i2s_configure(struct rpi_i2s_dev * dev)
+static void bcm2835_i2s_configure(struct rpi_audio_driver * dev)
 {
 	unsigned int data_length, framesync_length;
 	unsigned int slots, slot_width;
@@ -303,13 +291,13 @@ static void bcm2835_i2s_configure(struct rpi_i2s_dev * dev)
 			| BCM2835_I2S_DMAEN, 0xffffffff);
 
 	rpi_reg_update_bits(dev->base_addr, BCM2835_I2S_DREQ_A_REG,
-			  BCM2835_I2S_TX_PANIC(8)
-			| BCM2835_I2S_RX_PANIC(32)
-			| BCM2835_I2S_TX(16)
-			| BCM2835_I2S_RX(16), 0xffffffff);
+			  BCM2835_I2S_TX_PANIC(BCM2835_DMA_TX_PANIC_THR)
+			| BCM2835_I2S_RX_PANIC(BCM2835_DMA_RX_PANIC_THR)
+			| BCM2835_I2S_TX(BCM2835_DMA_THR)
+			| BCM2835_I2S_RX(BCM2835_DMA_THR), 0xffffffff);
 }
 
-void bcm2835_i2s_enable(struct rpi_i2s_dev *dev)
+void bcm2835_i2s_enable(struct rpi_audio_driver *dev)
 {
 	/* Disable RAM STBY */
 	rpi_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG,
@@ -323,7 +311,7 @@ void bcm2835_i2s_enable(struct rpi_i2s_dev *dev)
 			BCM2835_I2S_EN , BCM2835_I2S_EN);
 }
 
-static void bcm2835_i2s_clear_regs(struct rpi_i2s_dev *dev)
+static void bcm2835_i2s_clear_regs(struct rpi_audio_driver *dev)
 {
 	rpi_reg_write(dev->base_addr, BCM2835_I2S_CS_A_REG, 0);
 	rpi_reg_write(dev->base_addr, BCM2835_I2S_MODE_A_REG, 0);
@@ -335,44 +323,24 @@ static void bcm2835_i2s_clear_regs(struct rpi_i2s_dev *dev)
 	rpi_reg_write(dev->base_addr, BCM2835_I2S_GRAY_REG, 0);
 }
 
-int bcm28835_i2s_prepare_and_submit(struct rpi_i2s_dev *dev)
-{
-	int ret;
-	ret = bcm2835_i2s_dma_prepare(dev);
-	if (ret)
-		printk("bcm2835_i2s_dma_prepare failed!\n");
-
-	bcm2835_i2s_enable(dev);
-	bcm2835_i2s_submit_dma(dev);
-	return ret;
-}
-
 int bcm2835_i2s_init(struct platform_device *pdev)
 {
-	struct rpi_i2s_dev *dev;
-	int i, ret = 0;
+	struct rpi_audio_driver *dev;
+	int i;
+	int ret = 0;
 	struct resource *mem_resource;
 	void __iomem *base;
 	const __be32 *addr;
-	dma_addr_t dma_base, dma_phys_addr;
-	uint32_t val, len;
-	struct i2s_buffers_info *i2s_buffer;
-
+	dma_addr_t dma_base, dummy_phys_addr;
+	struct rpi_buffers_info *audio_buffer;
+	int *tmp;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev),
 			   GFP_KERNEL);
 	if (!dev)
 		return -ENOMEM;
 
-	dev->irq = BCM2835_I2S_IRQ_NUM;
 	rpi_device_i2s = dev;
-
-	ret = rtdm_irq_request(&i2s_rtdm_irq, dev->irq, bcm2835_i2s_intr,
-			       0, "rt-i2s", dev);
-	if(ret) {
-		printk("bcm2835_i2s_init: irq request failed !\n");
-		return -1;
-	}
 
 	mem_resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	base = devm_ioremap_resource(&pdev->dev, mem_resource);
@@ -381,7 +349,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 		return PTR_ERR(base);
 	}
 	dev->base_addr = base;
-	printk("dev->base_addr %p \n",dev->base_addr);
+
 	addr = of_get_address(pdev->dev.of_node, 0, NULL, NULL);
 	if (!addr) {
 		dev_err(&pdev->dev, "bcm2835_i2s_init: could not get DMA-register address\n");
@@ -389,11 +357,11 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	}
 
 	dma_base = be32_to_cpup(addr);
-	printk("dma_base %p addr %p\n",dma_base, addr);
 	dev->fifo_dma_addr = dma_base + BCM2835_I2S_FIFO_A_REG;
 	dev->addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
 	dev->dma_burst_size = 2;
 	dev->dev = &pdev->dev;
+	rtdm_event_init(&dev->irq_event, 0);
 
 	bcm2835_i2s_clear_regs(dev);
 	bcm2835_i2s_configure(dev);
@@ -401,72 +369,64 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	if (bcm2835_i2s_dma_setup(dev))
 		return -ENODEV;
 
-	i2s_buffer = kcalloc(1,  sizeof(struct i2s_buffers_info),
+	audio_buffer = kcalloc(1, sizeof(struct rpi_buffers_info),
 		GFP_KERNEL);
 
-	if (!i2s_buffer) {
-		printk("bcm2835_i2s_init: couldn't allocate i2s_buffer\n");
+	if (!audio_buffer) {
+		printk("bcm2835_i2s_init: couldn't allocate audio_buffer\n");
 		return -ENOMEM;
 	}
-	dev->buffer = i2s_buffer;
-	len = L1_CACHE_ALIGN(NUM_OF_PAGES * PAGE_SIZE);
-	i2s_buffer->rx_buf = dma_alloc_coherent(dev->dma_rx->device->dev,
-				len, &dma_phys_addr,
+	dev->buffer = audio_buffer;
+	audio_buffer->rx_buf = dma_zalloc_coherent(dev->dma_rx->device->dev,
+				NUM_OF_PAGES * PAGE_SIZE, &dummy_phys_addr,
 				GFP_KERNEL);
-
-	if (!i2s_buffer->rx_buf) {
+	if (!audio_buffer->rx_buf ) {
 		printk("bcm2835_i2s_init: couldn't allocate coherent_mem\n");
 		return -ENOMEM;
 	}
+	audio_buffer->rx_phys_addr = dummy_phys_addr;
+	audio_buffer->period_len = NUM_OF_WORDS * sizeof(uint32_t);
+	audio_buffer->buffer_len = 2 * audio_buffer->period_len;
+	audio_buffer->tx_buf = audio_buffer->rx_buf +
+			audio_buffer->buffer_len;
+	audio_buffer->tx_phys_addr = dummy_phys_addr + audio_buffer->buffer_len;
 
-	i2s_buffer->rx_phys_addr = dma_phys_addr;
-	i2s_buffer->period_len = NUM_OF_WORDS * sizeof(uint32_t);
-	i2s_buffer->buffer_len = 2 * i2s_buffer->period_len;
-	i2s_buffer->tx_buf = i2s_buffer->rx_buf +
-			i2s_buffer->buffer_len;
-	i2s_buffer->tx_phys_addr = dma_phys_addr + i2s_buffer->buffer_len;
-	printk("i2s_buffer->rx_phys_addr = %p\n",i2s_buffer->rx_phys_addr);
-	printk("i2s_buffer->tx_phys_addr = %p\n",i2s_buffer->tx_phys_addr);
-
-	/* ret = bcm2835_i2s_dma_prepare(dev);
+	ret = bcm2835_i2s_dma_prepare(dev);
 	if (ret)
 		printk("bcm2835_i2s_dma_prepare failed!\n");
 
-	bcm2835_i2s_enable(dev); */
+	bcm2835_i2s_enable(dev);
 
-	/* print all the registers just for debug*/
-	/* rpi_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG, &val);
-	printk("bcm2835_i2s_init: BCM2835_I2S_CS_A_REG = 0x%08X\n",val);
-	rpi_reg_read(dev->base_addr, BCM2835_I2S_MODE_A_REG, &val);
-	printk("bcm2835_i2s_init: BCM2835_I2S_MODE_A_REG = 0x%08X\n",val);
-	rpi_reg_read(dev->base_addr, BCM2835_I2S_RXC_A_REG, &val);
-	printk("bcm2835_i2s_init: BCM2835_I2S_RXC_A_REG = 0x%08X\n",val);
-	rpi_reg_read(dev->base_addr, BCM2835_I2S_TXC_A_REG, &val);
-	printk("bcm2835_i2s_init: BCM2835_I2S_TXC_A_REG = 0x%08X\n",val);
-	rpi_reg_read(dev->base_addr, BCM2835_I2S_INTEN_A_REG, &val);
-	printk("bcm2835_i2s_init: BCM2835_I2S_INTEN_A_REG = 0x%08X\n",val);
-	rpi_reg_read(dev->base_addr, BCM2835_I2S_INTSTC_A_REG, &val);
-	printk("bcm2835_i2s_init: BCM2835_I2S_INTSTC_A_REG = 0x%08X\n",val);
-	rpi_reg_read(dev->base_addr, BCM2835_I2S_DREQ_A_REG, &val);
-	printk("bcm2835_i2s_init: BCM2835_I2S_DREQ_A_REG = 0x%08X\n",val);
-	rpi_reg_read(dev->base_addr, BCM2835_I2S_GRAY_REG, &val);
-	printk("bcm2835_i2s_init: BCM2835_I2S_GRAY_REG = 0x%08X\n",val); */
+	bcm2835_i2s_clear_fifos(dev, true, true);
 
-	//bcm2835_i2s_submit_dma(dev);
-	
-	return 0;
+	tmp = (int *) audio_buffer->rx_buf;
+
+	for (i = 0; i < NUM_OF_WORDS * 4; i++) {
+		tmp[i] = 0;
+	}
+
+	for (i = 0; i < (BCM2835_DMA_THR + DEFAULT_AUDIO_N_CHANNELS); i++)
+		rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
+
+	msleep(10);
+
+	bcm2835_i2s_submit_dma(dev);
+	msleep(1000);
+	printk("i2s_init: starting transfers!\n");
+	bcm2835_i2s_start_stop(dev, BCM2835_I2S_START_CMD);
+
+	return ret;
 }
 
 void bcm2835_i2s_exit(struct platform_device *pdev)
 {
-	struct i2s_buffers_info *i2s_buffer = rpi_device_i2s->buffer;
-	rtdm_irq_free(&i2s_rtdm_irq);
+	struct rpi_buffers_info *audio_buffers = rpi_device_i2s->buffer;
 	devm_iounmap(&pdev->dev, (void *)rpi_device_i2s->base_addr);
 	dma_free_coherent(rpi_device_i2s->dma_rx->device->dev,
-				NUM_OF_PAGES * PAGE_SIZE, i2s_buffer->rx_buf,
-				i2s_buffer->rx_phys_addr);
+				NUM_OF_PAGES * PAGE_SIZE, audio_buffers->rx_buf,
+				audio_buffers->rx_phys_addr);
 	dma_release_channel(rpi_device_i2s->dma_tx);
 	dma_release_channel(rpi_device_i2s->dma_rx);
-	kfree(i2s_buffer);
+	kfree(audio_buffers);
 	devm_kfree(&pdev->dev, (void *)rpi_device_i2s);
 }
