@@ -380,8 +380,8 @@ static void bcm2835_i2s_clear_regs(struct rpi_audio_driver *dev)
 
 int bcm2835_i2s_init(struct platform_device *pdev)
 {
+	int i;
 	struct rpi_audio_driver *dev;
-	int i, val;
 	int ret = 0;
 	struct resource *mem_resource;
 	void __iomem *base;
@@ -463,10 +463,6 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 		rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
 
 	msleep(10);
-
-	for (i = 0, val = 0; i < NUM_OF_CV_INS; i++)
-		printk("gpio %d = %d\n",cv_gate_in[i],
-				gpio_get_value(cv_gate_in[i]));
 
 	bcm2835_i2s_submit_dma(dev);
 	msleep(1000);
