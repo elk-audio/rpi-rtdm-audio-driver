@@ -21,7 +21,7 @@
 #include <linux/io.h>
 #include <rtdm/driver.h>
 #include <rtdm/rtdm.h>
-
+#include <linux/gpio.h>
 
 /* RTDM headers */
 #include <rtdm/driver.h>
@@ -53,7 +53,7 @@ module_param(audio_ver_rev, uint, 0644);
 struct audio_dev_context {
 	ipipe_spinlock_t lock;
 	struct rpi_audio_driver *i2s_dev;
-	uint64_t user_proc_completions;
+	uint64_t user_proc_calls;
 	rtdm_task_t *audio_task;
 };
 
@@ -63,11 +63,12 @@ dma_cookie_t cookie_rx;
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags) {
 	struct audio_dev_context *dev_context;
+	int val;
 	printk("audio_rtdm: audio_open.\n");
 	dev_context = (struct audio_dev_context *)rtdm_fd_to_private(fd);
 	dev_context->i2s_dev = rpi_device_i2s;
 	dev_context->i2s_dev->wait_flag = 0;
-	dev_context->user_proc_completions = 0;
+	dev_context->user_proc_calls = 0;
 	rtdm_event_init(&dev_context->i2s_dev->irq_event, 0);
 	return 0;
 }
@@ -111,10 +112,9 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 			return result;
 		}
 		else {
-			dev_context->user_proc_completions = dev->kinterrupts;
+			dev_context->user_proc_calls = dev->kinterrupts;
 			result = dev->buffer_idx;
-			dev->buffer_idx = ~(dev->buffer_idx) &
-						 0x00000001;
+			dev->buffer_idx = ~(dev->buffer_idx) & BIT(0);
 			return result;
 		}
 		return 0;
@@ -134,9 +134,8 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 
 	case AUDIO_USERPROC_FINISHED:
 	{
-		dev_context->user_proc_completions++;
 		return (dev->kinterrupts -
-		dev_context->user_proc_completions);
+		dev_context->user_proc_calls);
 	}
 
 	default:

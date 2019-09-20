@@ -26,14 +26,32 @@
 #include <linux/interrupt.h>
 #include <asm/io.h>
 #include <linux/mm.h>
+#include <linux/gpio.h>
 
 #include "rpi-bcm2835-i2s.h"
 #include "rpi-rtdm-audio.h"
 
-struct rpi_audio_driver *rpi_device_i2s;
+/**
+ * Cv gate gpio pin definitions
+ */
+#define 	NUM_OF_CV_OUTS	4
+#define 	NUM_OF_CV_INS	2
+#define	 	CV_GATE_OUT1	17
+#define 	CV_GATE_OUT2	27
+#define 	CV_GATE_OUT3	22
+#define 	CV_GATE_OUT4	23
+#define 	CV_GATE_IN1	24
+#define 	CV_GATE_IN2	25
 
+struct rpi_audio_driver *rpi_device_i2s;
 extern dma_cookie_t cookie_tx;
 extern dma_cookie_t cookie_rx;
+
+static int cv_gate_out[NUM_OF_CV_OUTS] =
+ {CV_GATE_OUT1, CV_GATE_OUT2, CV_GATE_OUT3, CV_GATE_OUT4};
+
+static int cv_gate_in[NUM_OF_CV_INS] =
+ {CV_GATE_IN1, CV_GATE_IN2};
 
 void bcm2835_i2s_clear_fifos(struct rpi_audio_driver *dev,
 				    bool tx, bool rx)
@@ -87,12 +105,12 @@ void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd)
 	int32_t tmp[9], samples[2] = {0xff, 0xff};
 	wmb();
 	mask = BCM2835_I2S_RXON | BCM2835_I2S_TXON;
- 
+
 	if (cmd == BCM2835_I2S_START_CMD) {
 		rpi_reg_update_bits(dev->base_addr,
 			BCM2835_I2S_CS_A_REG, mask, mask);
-		/*Assumption: According to my colleague Mr. Sharan Yagneswar the last two channels from pcm3168 are always zero & 
-		the probability of getting two successive zero values in any other two channels is as much as earth being hit by an asteroid 
+		/*Assumption: According to my colleague Mr. Sharan Yagneswar the last two channels from pcm3168 are always zero &
+		the probability of getting two successive zero values in any other two channels is as much as earth being hit by an asteroid
 		*/
 		while (samples[0] != 0 || samples[1] != 0) {
 			rpi_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG,
@@ -110,9 +128,6 @@ void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd)
 			}
 		}
 		printk("bcm2835_i2s_start_stop: %d samples discarded\n",discarded);
-		/* for ( val = 0; val < discarded; val++)
-			printk("%x\n",tmp[val]); */
-
 	}
 	else {
 		rpi_reg_update_bits(dev->base_addr,
@@ -122,7 +137,10 @@ void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd)
 
 static void bcm2835_i2s_dma_callback(void *data)
 {
+	int i;
+	uint32_t val;
 	struct rpi_audio_driver *dev = data;
+
 	dev->kinterrupts++;
 	if (!dev->wait_flag) {
 		dev->buffer_idx = ~(dev->buffer_idx) &
@@ -130,6 +148,16 @@ static void bcm2835_i2s_dma_callback(void *data)
 	} else
 	{
 		rtdm_event_signal(&dev->irq_event);
+		for (i = 0; i < NUM_OF_CV_OUTS; i++) {
+			val = (unsigned long) *dev->buffer->cv_gate_out &
+			 BIT(i);
+			gpio_set_value(cv_gate_out[i], val);
+		}
+		val = 0;
+		for (i = 0; i < NUM_OF_CV_INS; i++) {
+		val |= gpio_get_value(cv_gate_in[i]) << i;
+		}
+		*dev->buffer->cv_gate_in = val;
 	}
 }
 
@@ -229,6 +257,33 @@ static int bcm2835_i2s_dma_setup(struct rpi_audio_driver *rpi_dev)
 	return 0;
 }
 
+static int bcm2835_init_cv_gates(void) {
+	int  i, ret;
+	for ( i = 0; i < NUM_OF_CV_OUTS; i++) {
+		if ((ret = gpio_request(cv_gate_out[i], "cv_out_gate")) < 0) {
+			printk("failed to get cv out gate gpio\n");
+			return ret;
+		}
+
+		if ((ret = gpio_direction_output(cv_gate_out[i], 0)) < 0) {
+			printk("failed to set gpio dir\n");
+			return ret;
+		}
+	}
+	for ( i = 0; i < NUM_OF_CV_INS; i++) {
+		if ((ret = gpio_request(cv_gate_in[i], "cv_in_gate")) < 0) {
+			printk("failed to get cv out gate gpio\n");
+			return ret;
+		}
+
+		if ((ret = gpio_direction_input(cv_gate_in[i])) < 0) {
+			printk("failed to set gpio dir\n");
+			return ret;
+		}
+	}
+	return ret;
+}
+
 static void bcm2835_i2s_configure(struct rpi_audio_driver * dev)
 {
 	unsigned int data_length, framesync_length;
@@ -326,14 +381,13 @@ static void bcm2835_i2s_clear_regs(struct rpi_audio_driver *dev)
 int bcm2835_i2s_init(struct platform_device *pdev)
 {
 	struct rpi_audio_driver *dev;
-	int i;
+	int i, val;
 	int ret = 0;
 	struct resource *mem_resource;
 	void __iomem *base;
 	const __be32 *addr;
 	dma_addr_t dma_base, dummy_phys_addr;
 	struct rpi_buffers_info *audio_buffer;
-	int *tmp;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev),
 			   GFP_KERNEL);
@@ -365,6 +419,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 
 	bcm2835_i2s_clear_regs(dev);
 	bcm2835_i2s_configure(dev);
+	bcm2835_init_cv_gates();
 
 	if (bcm2835_i2s_dma_setup(dev))
 		return -ENODEV;
@@ -390,6 +445,11 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	audio_buffer->tx_buf = audio_buffer->rx_buf +
 			audio_buffer->buffer_len;
 	audio_buffer->tx_phys_addr = dummy_phys_addr + audio_buffer->buffer_len;
+	audio_buffer->cv_gate_out = audio_buffer->rx_buf +
+			audio_buffer->buffer_len * 2;
+	audio_buffer->cv_gate_in = audio_buffer->rx_buf +
+			audio_buffer->buffer_len * 2 + sizeof(uint32_t);
+	*audio_buffer->cv_gate_out = 0x0f;
 
 	ret = bcm2835_i2s_dma_prepare(dev);
 	if (ret)
@@ -399,20 +459,17 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 
 	bcm2835_i2s_clear_fifos(dev, true, true);
 
-	tmp = (int *) audio_buffer->rx_buf;
-
-	for (i = 0; i < NUM_OF_WORDS * 4; i++) {
-		tmp[i] = 0;
-	}
-
-	for (i = 0; i < (BCM2835_DMA_THR + DEFAULT_AUDIO_N_CHANNELS); i++)
+	for (i = 0; i < (BCM2835_DMA_THR + DEFAULT_AUDIO_N_CHANNELS * 2); i++)
 		rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
 
 	msleep(10);
 
+	for (i = 0, val = 0; i < NUM_OF_CV_INS; i++)
+		printk("gpio %d = %d\n",cv_gate_in[i],
+				gpio_get_value(cv_gate_in[i]));
+
 	bcm2835_i2s_submit_dma(dev);
 	msleep(1000);
-	printk("i2s_init: starting transfers!\n");
 	bcm2835_i2s_start_stop(dev, BCM2835_I2S_START_CMD);
 
 	return ret;

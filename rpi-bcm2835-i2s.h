@@ -131,6 +131,8 @@ static inline void rpi_reg_read(void *base_addr, uint32_t reg_addr,
 }
 
 struct rpi_buffers_info {
+	uint32_t 	 	*cv_gate_out;
+	uint32_t 	 	*cv_gate_in;
 	void			*tx_buf;
 	void			*rx_buf;
 	size_t			buffer_len;
