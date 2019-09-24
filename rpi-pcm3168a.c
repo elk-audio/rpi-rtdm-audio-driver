@@ -186,7 +186,8 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 	cmd[0] = PCM_ADC_CNTRL_TWO_REG;
 	cmd[1] = 0x00 | ADC_CHAN_0_1_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_2_3_POWER_SAVE_DISABLE_MASK |
-			ADC_CHAN_4_5_POWER_SAVE_DISABLE_MASK;
+			ADC_CHAN_4_5_POWER_SAVE_DISABLE_MASK |
+			ADC_CHAN_4_5_NO_HPF_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
 		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CNTRL_TWO_REG to power up adcs\n");
 		return ret;
