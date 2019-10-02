@@ -109,15 +109,21 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 	{
 		if ((result = rtdm_event_wait(&dev->irq_event)
 		) < 0) {
+			printk("rtdm_event_wait failed\n");
 			return result;
 		}
-		else {
-			dev_context->user_proc_calls = dev->kinterrupts;
-			result = dev->buffer_idx;
-			dev->buffer_idx = ~(dev->buffer_idx) & BIT(0);
-			return result;
+
+		dev_context->user_proc_calls = dev->kinterrupts;
+		result = dev->buffer_idx;
+		if (result) {
+			result = 0;
 		}
-		return 0;
+		else
+		{
+			result = 1;
+		}
+
+		return result;
 	}
 
 	case AUDIO_PROC_START:
@@ -134,8 +140,12 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 
 	case AUDIO_USERPROC_FINISHED:
 	{
-		return (dev->kinterrupts -
+		result = (dev->kinterrupts -
 		dev_context->user_proc_calls);
+		if (result) {
+			printk("under run %d!\n",result);
+		}
+		return result;
 	}
 
 	default:

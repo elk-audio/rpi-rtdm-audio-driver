@@ -142,10 +142,8 @@ static void bcm2835_i2s_dma_callback(void *data)
 	struct rpi_audio_driver *dev = data;
 
 	dev->kinterrupts++;
-	if (!dev->wait_flag) {
-		dev->buffer_idx = ~(dev->buffer_idx) &
-						 0x00000001;
-	} else
+	dev->buffer_idx = ~(dev->buffer_idx) & 0x1;
+	if (dev->wait_flag)
 	{
 		rtdm_event_signal(&dev->irq_event);
 		for (i = 0; i < NUM_OF_CV_OUTS; i++) {
