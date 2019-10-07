@@ -178,7 +178,8 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 	cmd[1] = 0x00 | ADC_MASTER_MODE_512xFS |
 			ADC_LJ_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CNTRL_ONE_REG\n");
+		printk(KERN_ERR "config_codec: i2c_master_send failed for \
+		PCM_ADC_CNTRL_ONE_REG\n");
 		return ret;
 	}
 	msleep(10);
@@ -189,7 +190,8 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			ADC_CHAN_4_5_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_4_5_NO_HPF_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CNTRL_TWO_REG to power up adcs\n");
+		printk("config_codec: i2c_master_send failed to send cmd to \
+		PCM_ADC_CNTRL_TWO_REG to power up adcs\n");
 		return ret;
 	}
 	msleep(10);
@@ -199,7 +201,8 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			DAC_CHAN_4_5_NORMAL_MODE_MASK |
 			DAC_CHAN_6_7_NORMAL_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to PCM_DAC_CNTRL_REG_TWO to power up dacs\n");
+		printk("config_codec: i2c_master_send failed to send cmd to \
+		PCM_DAC_CNTRL_REG_TWO to power up dacs\n");
 		return ret;
 	}
 
@@ -213,14 +216,14 @@ int rpi_pcm3168a_codec_init(void) {
 	i2c_device_client = i2c_new_device(i2c_device_adapter, i2c_clkgen_board_info);
 
 	if (rpi_config_clk_gen(i2c_device_client))
-		printk("rpi_config_clk_gen failed\n");
+		printk(KERN_ERR "audio_rtdm: rpi_config_clk_gen failed\n");
 
 	if ((ret = gpio_request(CODEC_RST_GPIO, "CODEC_RST")) < 0) {
-		printk("Failed to get CODEC_RST_GPIO\n");
+		printk(KERN_ERR "audio_rtdm: Failed to get CODEC_RST_GPIO\n");
 		return ret;
 	}
 	if ((ret = gpio_request(SIKA_CPLD_RST, "SIKA_RST")) < 0) {
-		printk("Failed to get SIKA_RST\n");
+		printk(KERN_ERR "audio_rtdm: Failed to get SIKA_RST\n");
 		return ret;
 	}
 	gpio_direction_output(SIKA_CPLD_RST, 0);
@@ -231,11 +234,10 @@ int rpi_pcm3168a_codec_init(void) {
 	i2c_device_client = i2c_new_device(i2c_device_adapter, i2c_pcm3168a_board_info);
 
 	if (rpi_pcm3168a_config_codec(i2c_device_client)) {
-		printk("config_codec failed\n");
+		printk(KERN_ERR "audio_rtdm: config_codec failed\n");
 		return -1;
-	} else {
-	printk("codec configured\n");
 	}
+	printk(KERN_ERR "audio_rtdm: codec configured\n");
 	return 0;
 }
 

@@ -1,7 +1,8 @@
 /**
  * @file rpi-rtdm-i2s.c
  * @author Nitin Kulkarni (nitin.kulkarni@mindmusiclabs.com)
- * @brief 
+ * @brief I2S module of theRTDM audio driver.
+ * A lot of stuff is based on the mainline I2S module by Florian Meier
  * @version 0.1
  * @date 2019-06-11
  * 
@@ -127,7 +128,7 @@ void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd)
 					 discarded++;
 			}
 		}
-		printk("bcm2835_i2s_start_stop: %d samples discarded\n",discarded);
+		printk(KERN_INFO "audio_rtdm: %d sampls discarded\n",discarded);
 	}
 	else {
 		rpi_reg_update_bits(dev->base_addr,
@@ -251,7 +252,7 @@ static int bcm2835_i2s_dma_setup(struct rpi_audio_driver *rpi_dev)
 		return -ENODEV;
 	}
 
-	printk("bcm2835_i2s_dma_setup: Successful.\n");
+	printk(KERN_INFO "bcm2835_i2s_dma_setup: Successful.\n");
 	return 0;
 }
 
@@ -259,23 +260,23 @@ static int bcm2835_init_cv_gates(void) {
 	int  i, ret;
 	for ( i = 0; i < NUM_OF_CV_OUTS; i++) {
 		if ((ret = gpio_request(cv_gate_out[i], "cv_out_gate")) < 0) {
-			printk("failed to get cv out gate gpio\n");
+			printk(KERN_ERR "audio_rtdm: failed to get cv out\n");
 			return ret;
 		}
 
 		if ((ret = gpio_direction_output(cv_gate_out[i], 0)) < 0) {
-			printk("failed to set gpio dir\n");
+			printk(KERN_ERR "audio_rtdm: failed to set gpio dir\n");
 			return ret;
 		}
 	}
 	for ( i = 0; i < NUM_OF_CV_INS; i++) {
 		if ((ret = gpio_request(cv_gate_in[i], "cv_in_gate")) < 0) {
-			printk("failed to get cv out gate gpio\n");
+			printk(KERN_ERR "audio_rtdm: failed to get cv out\n");
 			return ret;
 		}
 
 		if ((ret = gpio_direction_input(cv_gate_in[i])) < 0) {
-			printk("failed to set gpio dir\n");
+			printk(KERN_ERR "audio_rtdm: failed to set gpio dir\n");
 			return ret;
 		}
 	}
@@ -397,14 +398,14 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	mem_resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	base = devm_ioremap_resource(&pdev->dev, mem_resource);
 	if (IS_ERR(base)) {
-		printk("bcm2835_i2s_init: devm_ioremap_resource failed.");
+		dev_err(&pdev->dev, "devm_ioremap_resource failed.");
 		return PTR_ERR(base);
 	}
 	dev->base_addr = base;
 
 	addr = of_get_address(pdev->dev.of_node, 0, NULL, NULL);
 	if (!addr) {
-		dev_err(&pdev->dev, "bcm2835_i2s_init: could not get DMA-register address\n");
+		dev_err(&pdev->dev, "could not get DMA-register address\n");
 		return -EINVAL;
 	}
 
@@ -426,7 +427,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 		GFP_KERNEL);
 
 	if (!audio_buffer) {
-		printk("bcm2835_i2s_init: couldn't allocate audio_buffer\n");
+		dev_err(&pdev->dev, "couldn't allocate audio_buffer\n");
 		return -ENOMEM;
 	}
 	dev->buffer = audio_buffer;
@@ -434,7 +435,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 				NUM_OF_PAGES * PAGE_SIZE, &dummy_phys_addr,
 				GFP_KERNEL);
 	if (!audio_buffer->rx_buf ) {
-		printk("bcm2835_i2s_init: couldn't allocate coherent_mem\n");
+		dev_err(&pdev->dev, "couldn't allocate coherent_mem\n");
 		return -ENOMEM;
 	}
 	audio_buffer->rx_phys_addr = dummy_phys_addr;
@@ -451,7 +452,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 
 	ret = bcm2835_i2s_dma_prepare(dev);
 	if (ret)
-		printk("bcm2835_i2s_dma_prepare failed!\n");
+		dev_err(&pdev->dev,"bcm2835_i2s_dma_prepare failed!\n");
 
 	bcm2835_i2s_enable(dev);
 
@@ -463,7 +464,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	msleep(10);
 
 	bcm2835_i2s_submit_dma(dev);
-	msleep(1000);
+	msleep(500);
 	bcm2835_i2s_start_stop(dev, BCM2835_I2S_START_CMD);
 
 	return ret;

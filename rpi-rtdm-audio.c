@@ -63,8 +63,7 @@ dma_cookie_t cookie_rx;
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags) {
 	struct audio_dev_context *dev_context;
-	int val;
-	printk("audio_rtdm: audio_open.\n");
+	printk(KERN_INFO "audio_rtdm: audio_open.\n");
 	dev_context = (struct audio_dev_context *)rtdm_fd_to_private(fd);
 	dev_context->i2s_dev = rpi_device_i2s;
 	dev_context->i2s_dev->wait_flag = 0;
@@ -77,7 +76,7 @@ static void audio_driver_close(struct rtdm_fd *fd)
 {
 	struct audio_dev_context *dev_context = (struct audio_dev_context *)
 							rtdm_fd_to_private(fd);
-	printk("audio_rtdm: audio_close.\n");
+	printk(KERN_INFO "audio_rtdm: audio_close.\n");
 	rtdm_event_destroy(&dev_context->i2s_dev->irq_event);
 }
 
@@ -109,7 +108,7 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 	{
 		if ((result = rtdm_event_wait(&dev->irq_event)
 		) < 0) {
-			printk("rtdm_event_wait failed\n");
+			printk(KERN_ERR "rtdm_event_wait failed\n");
 			return result;
 		}
 
@@ -143,7 +142,7 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 		result = (dev->kinterrupts -
 		dev_context->user_proc_calls);
 		if (result) {
-			printk("under run %d!\n",result);
+			printk(KERN_WARNING "under run %d!\n",result);
 		}
 		return result;
 	}
@@ -181,24 +180,24 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 	int ret;
 
 	if (!realtime_core_enabled()) {
-		printk("realtime_core_enabled returned false ! \n");
+		dev_err(&pdev->dev, "realtime_core_enabled returned false.\n");
 		return -ENODEV;
 	}
 	msleep(300);
 	if (rpi_pcm3168a_codec_init()) {
-		printk("audio_rtdm_driver_probe: codec_init failed\n");
+		dev_err(&pdev->dev, "codec_init failed.\n");
 		return -1;
 	}
 	msleep(300);
 
 	if (bcm2835_i2s_init(pdev)) {
-		printk("audio_rtdm_driver_probe: i2s_init failed\n");
+		dev_err(&pdev->dev, "i2s_init failed\n");
 		return -1;
 	}
 	ret = rtdm_dev_register(&rtdm_audio_device);
 	if (ret) {
 		rtdm_dev_unregister(&rtdm_audio_device);
-		printk(KERN_INFO "audio_rtdm: driver init failed\n");
+		dev_err(&pdev->dev, "driver init failed\n");
 		return ret;
 	}
 
@@ -209,7 +208,7 @@ static int audio_rtdm_driver_probe(struct platform_device *pdev) {
 static int audio_rtdm_driver_remove(struct platform_device *pdev) {
 	printk(KERN_INFO "audio_rtdm: driver exiting...\n");
 	if (rpi_pcm3168a_codec_exit())
-		printk("i2c_exit failed\n");
+		dev_err(&pdev->dev, "i2c_exit failed\n");
 	bcm2835_i2s_exit(pdev);
 	rtdm_dev_unregister(&rtdm_audio_device);
 	return 0;
