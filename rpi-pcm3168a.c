@@ -18,7 +18,8 @@
 #include "rpi-pcm3168a.h"
 
 #define CODEC_RST_GPIO  16
-#define SIKA_CPLD_RST 4
+#define SIKA_CPLD_RST 	4
+#define I2C_BUS_NUM	1
 
 static struct i2c_adapter* i2c_device_adapter;
 static struct i2c_client* i2c_device_client;
@@ -91,7 +92,7 @@ static int rpi_config_clk_gen(struct i2c_client* i2c_client_dev) {
 		cmd[1] = CLKGEN_CLK_PWR_DWN_MASK;
 		if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd,2))
 		< 0) {
-			printk("i2c_init: i2c_master_send failed to send cmd\n");
+			printk("audio_rtdm: i2c_master_send failed to send cmd\n");
 			return ret;
 		}
 	}
@@ -99,7 +100,7 @@ static int rpi_config_clk_gen(struct i2c_client* i2c_client_dev) {
 	for (i = 0; i < CLKGEN_NUM_OF_REGS; i++) {
 		if (i2c_master_send(i2c_client_dev, &clkgen_reg_val_lookup[i][0]
 		, 2) < 0) {
-			printk("i2c_init: Faild to send look up\n");
+			printk("audio_rtdm: Faild to send look up\n");
 		}
 		msleep(20);
 	}
@@ -108,7 +109,7 @@ static int rpi_config_clk_gen(struct i2c_client* i2c_client_dev) {
 	cmd[1] = CLKGEN_PLL_RESET_MASK;
 
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("i2c_init: i2c_master_send failed to send cmd\n");
+		printk("audio_rtdm: i2c_master_send failed to send cmd\n");
 		return ret;
 	}
 	msleep(50);
@@ -116,7 +117,7 @@ static int rpi_config_clk_gen(struct i2c_client* i2c_client_dev) {
 	cmd[1] = CLKGEN_EN_OUTPUT_MASK;
 
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("i2c_init: i2c_master_send failed to send cmd\n");
+		printk("audio_rtdm: i2c_master_send failed to send cmd\n");
 		return ret;
 	}
 	return 0;
@@ -132,7 +133,8 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			DAC_CHAN_4_5_DISABLED_MODE_MASK |
 			DAC_CHAN_6_7_DISABLED_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd  to PCM_DAC_CNTRL_TWO_REG\n");
+		printk("audio_rtdm: i2c_master_send failed to send cmd  to \
+		PCM_DAC_CNTRL_TWO_REG\n");
 		return ret;
 	}
 	msleep(10);
@@ -141,14 +143,16 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			ADC_CHAN_2_3_POWER_SAVE_ENABLE_MASK |
 			ADC_CHAN_4_5_POWER_SAVE_ENABLE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CNTRL_TWO_REG\n");
+		printk("audio_rtdm: i2c_master_send failed to send cmd to \
+		PCM_ADC_CNTRL_TWO_REG\n");
 		return ret;
 	}
 	msleep(10);
 	cmd[0] = PCM_DAC_CNTRL_ONE_REG;
 	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK | DAC_LJ_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to PCM_DAC_CNTRL_ONE_REG\n");
+		printk("audio_rtdm: i2c_master_send failed to send cmd to \
+		PCM_DAC_CNTRL_ONE_REG\n");
 		return ret;
 	}
 	msleep(10);
@@ -157,7 +161,8 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			DAC_ATTEN_SPEED_SLOW_MASK |
 			DAC_DEMPH_DISABLE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to DAC_CONTROL_3_REG_DATA\n");
+		printk("config_codec: i2c_master_send failed to send cmd to \
+		DAC_CONTROL_3_REG_DATA\n");
 		return ret;
 	}
 	msleep(10);
@@ -165,7 +170,8 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 	cmd[1] = 0x00 | ADC_MASTER_VOLUME_CONTROL_MODE_MASK |
 			ADC_ATTEN_SPEED_SLOW_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to PCM_ADC_CONTROL_THREE_REG\n");
+		printk("audio_rtdm: i2c_master_send failed to send cmd to \
+		PCM_ADC_CONTROL_THREE_REG\n");
 		return ret;
 	}
 	msleep(10);
@@ -178,7 +184,7 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 	cmd[1] = 0x00 | ADC_MASTER_MODE_512xFS |
 			ADC_LJ_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk(KERN_ERR "config_codec: i2c_master_send failed for \
+		printk(KERN_ERR "audio_rtdm: i2c_master_send failed for \
 		PCM_ADC_CNTRL_ONE_REG\n");
 		return ret;
 	}
@@ -190,8 +196,8 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			ADC_CHAN_4_5_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_4_5_NO_HPF_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to \
-		PCM_ADC_CNTRL_TWO_REG to power up adcs\n");
+		printk(KERN_ERR "audio_rtdm: i2c_master_send failed to send cmd \
+		to power up adcs\n");
 		return ret;
 	}
 	msleep(10);
@@ -201,7 +207,7 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			DAC_CHAN_4_5_NORMAL_MODE_MASK |
 			DAC_CHAN_6_7_NORMAL_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to \
+		printk(KERN_ERR "audio_rtdm: i2c_master_send failed to send cmd to \
 		PCM_DAC_CNTRL_REG_TWO to power up dacs\n");
 		return ret;
 	}
@@ -212,7 +218,7 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 int rpi_pcm3168a_codec_init(void) {
 	int ret;
 	// Setup device
-	i2c_device_adapter = i2c_get_adapter(1);
+	i2c_device_adapter = i2c_get_adapter(I2C_BUS_NUM);
 	i2c_device_client = i2c_new_device(i2c_device_adapter, i2c_clkgen_board_info);
 
 	if (rpi_config_clk_gen(i2c_device_client))
@@ -237,7 +243,7 @@ int rpi_pcm3168a_codec_init(void) {
 		printk(KERN_ERR "audio_rtdm: config_codec failed\n");
 		return -1;
 	}
-	printk(KERN_ERR "audio_rtdm: codec configured\n");
+	printk(KERN_INFO "audio_rtdm: codec configured\n");
 	return 0;
 }
 
