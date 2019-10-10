@@ -47,6 +47,7 @@
 struct rpi_audio_driver *rpi_device_i2s;
 extern dma_cookie_t cookie_tx;
 extern dma_cookie_t cookie_rx;
+static uint64_t  new_wakeup, old_wakeup = 0, diff;
 
 static int cv_gate_out[NUM_OF_CV_OUTS] =
  {CV_GATE_OUT1, CV_GATE_OUT2, CV_GATE_OUT3, CV_GATE_OUT4};
@@ -141,6 +142,17 @@ static void bcm2835_i2s_dma_callback(void *data)
 	int i;
 	uint32_t val;
 	struct rpi_audio_driver *dev = data;
+
+	new_wakeup = rtdm_clock_read_monotonic();
+	if (!old_wakeup) {
+		old_wakeup = new_wakeup;
+	} else {
+		diff = new_wakeup - old_wakeup;
+		if (diff < IRQ_FILTER_TIME_NS) {
+			return;
+		}
+		old_wakeup = new_wakeup;
+	}
 
 	dev->kinterrupts++;
 	dev->buffer_idx = ~(dev->buffer_idx) & 0x1;
@@ -347,8 +359,8 @@ static void bcm2835_i2s_configure(struct rpi_audio_driver * dev)
 	rpi_reg_update_bits(dev->base_addr, BCM2835_I2S_DREQ_A_REG,
 			  BCM2835_I2S_TX_PANIC(BCM2835_DMA_TX_PANIC_THR)
 			| BCM2835_I2S_RX_PANIC(BCM2835_DMA_RX_PANIC_THR)
-			| BCM2835_I2S_TX(BCM2835_DMA_THR)
-			| BCM2835_I2S_RX(BCM2835_DMA_THR), 0xffffffff);
+			| BCM2835_I2S_TX(BCM2835_DMA_THR_TX)
+			| BCM2835_I2S_RX(BCM2835_DMA_THR_RX), 0xffffffff);
 }
 
 void bcm2835_i2s_enable(struct rpi_audio_driver *dev)
@@ -458,7 +470,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 
 	bcm2835_i2s_clear_fifos(dev, true, true);
 
-	for (i = 0; i < (BCM2835_DMA_THR + DEFAULT_AUDIO_N_CHANNELS * 2); i++)
+	for (i = 0; i < (BCM2835_DMA_THR_TX + DEFAULT_AUDIO_N_CHANNELS * 4); i++)
 		rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
 
 	msleep(10);
