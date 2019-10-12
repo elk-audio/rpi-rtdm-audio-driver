@@ -35,12 +35,6 @@ MODULE_AUTHOR("Nitin Kulkarni");
 MODULE_DESCRIPTION("RTDM audio driver for RPi");
 MODULE_LICENSE("GPL");
 
-static uint audio_buffer_size = DEFAULT_AUDIO_N_FRAMES_PER_BUFFER;
-module_param(audio_buffer_size, uint, 0644);
-
-static uint audio_channels = DEFAULT_AUDIO_N_CHANNELS;
-module_param(audio_channels, uint, 0644);
-
 static uint audio_ver_maj = AUDIO_RTDM_VERSION_MAJ;
 module_param(audio_ver_maj, uint, 0644);
 

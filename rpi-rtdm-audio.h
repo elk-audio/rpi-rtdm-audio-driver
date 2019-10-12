@@ -23,8 +23,7 @@
 
 #define DEFAULT_AUDIO_N_CHANNELS			8
 #define DEFAULT_AUDIO_N_FRAMES_PER_BUFFER		64
-#define NUM_OF_WORDS (DEFAULT_AUDIO_N_CHANNELS * \
-DEFAULT_AUDIO_N_FRAMES_PER_BUFFER)
+#define NUM_OF_WORDS (audio_buffer_size * audio_channels)
 #define NUM_OF_PAGES					20
 #define IRQ_FILTER_TIME_NS				150000
 

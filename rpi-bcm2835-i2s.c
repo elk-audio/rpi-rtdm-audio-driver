@@ -44,6 +44,12 @@
 #define 	CV_GATE_IN1	24
 #define 	CV_GATE_IN2	25
 
+static uint audio_buffer_size = DEFAULT_AUDIO_N_FRAMES_PER_BUFFER;
+module_param(audio_buffer_size, uint, 0644);
+
+static uint audio_channels = DEFAULT_AUDIO_N_CHANNELS;
+module_param(audio_channels, uint, 0644);
+
 struct rpi_audio_driver *rpi_device_i2s;
 extern dma_cookie_t cookie_tx;
 extern dma_cookie_t cookie_rx;
