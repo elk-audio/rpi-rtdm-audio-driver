@@ -135,9 +135,6 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 	{
 		result = (dev->kinterrupts -
 		dev_context->user_proc_calls);
-		if (result) {
-			printk(KERN_WARNING "under run %d!\n",result);
-		}
 		return result;
 	}
 
