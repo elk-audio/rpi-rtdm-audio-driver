@@ -68,10 +68,18 @@ static int audio_driver_open(struct rtdm_fd *fd, int oflags) {
 
 static void audio_driver_close(struct rtdm_fd *fd)
 {
+	int i;
 	struct audio_dev_context *dev_context = (struct audio_dev_context *)
 							rtdm_fd_to_private(fd);
+	int *tx = dev_context->i2s_dev->buffer->tx_buf;
 	printk(KERN_INFO "audio_rtdm: audio_close.\n");
 	rtdm_event_destroy(&dev_context->i2s_dev->irq_event);
+	if (dev_context->i2s_dev->wait_flag) {
+		for (i = 0; i < dev_context->i2s_dev->buffer->buffer_len; i++) {
+			tx[i] = 0;
+		}
+		dev_context->i2s_dev->wait_flag = 0;
+	}
 }
 
 static int audio_driver_mmap_nrt(struct rtdm_fd *fd, struct vm_area_struct *vma)
