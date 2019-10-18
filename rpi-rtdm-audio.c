@@ -87,14 +87,8 @@ static int audio_driver_mmap_nrt(struct rtdm_fd *fd, struct vm_area_struct *vma)
 	struct audio_dev_context *dev_context = (struct audio_dev_context *)
 							rtdm_fd_to_private(fd);
 	struct rpi_buffers_info *i2s_buffer = dev_context->i2s_dev->buffer;
-	struct rpi_audio_driver *dev = dev_context->i2s_dev;
-	unsigned long len = vma->vm_end - vma->vm_start;
-	int ret = -EAGAIN;
-
-	vma->vm_page_prot = PAGE_SHARED;
-	ret = dma_mmap_coherent(dev->dma_rx->device->dev, vma,
-				i2s_buffer->rx_buf, i2s_buffer->rx_phys_addr, len);
-	return ret;
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+	return rtdm_mmap_kmem(vma, i2s_buffer->rx_buf);
 }
 
 static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
