@@ -476,7 +476,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 
 	bcm2835_i2s_clear_fifos(dev, true, true);
 
-	for (i = 0; i < (BCM2835_DMA_THR_TX + DEFAULT_AUDIO_N_CHANNELS * 4); i++)
+	for (i = 0; i < (BCM2835_DMA_THR_TX + DEFAULT_AUDIO_N_CHANNELS); i++)
 		rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
 
 	msleep(10);
@@ -491,6 +491,9 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 void bcm2835_i2s_exit(struct platform_device *pdev)
 {
 	struct rpi_buffers_info *audio_buffers = rpi_device_i2s->buffer;
+	dmaengine_terminate_async(rpi_device_i2s->dma_tx);
+	dmaengine_terminate_async(rpi_device_i2s->dma_rx);
+	bcm2835_i2s_start_stop(rpi_device_i2s, BCM2835_I2S_STOP_CMD);
 	devm_iounmap(&pdev->dev, (void *)rpi_device_i2s->base_addr);
 	dma_free_coherent(rpi_device_i2s->dma_rx->device->dev,
 				NUM_OF_PAGES * PAGE_SIZE, audio_buffers->rx_buf,
