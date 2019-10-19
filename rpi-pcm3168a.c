@@ -73,13 +73,13 @@ static uint8_t clkgen_reg_val_lookup[CLKGEN_NUM_OF_REGS][2] =
 
 static struct i2c_board_info i2c_clkgen_board_info[] =  {
 	{
-	I2C_BOARD_INFO("clk-gen", 0x60),
+		I2C_BOARD_INFO("clk-gen", 0x60),
 	}
 };
 
 static struct i2c_board_info i2c_pcm3168a_board_info[] =  {
 	{
-	I2C_BOARD_INFO("pcm-3168a", 0x44),
+		I2C_BOARD_INFO("pcm-3168a", 0x44),
 	}
 };
 
@@ -232,9 +232,11 @@ int rpi_pcm3168a_codec_init(void) {
 		printk(KERN_ERR "audio_rtdm: Failed to get SIKA_RST\n");
 		return ret;
 	}
+	gpio_direction_output(SIKA_CPLD_RST, 1);
+	msleep(5);
 	gpio_direction_output(SIKA_CPLD_RST, 0);
 	gpio_direction_output(CODEC_RST_GPIO, 0);
-	msleep(10);
+	msleep(5);
 	gpio_direction_output(CODEC_RST_GPIO, 1);
 	msleep(10);
 	i2c_device_client = i2c_new_device(i2c_device_adapter, i2c_pcm3168a_board_info);
