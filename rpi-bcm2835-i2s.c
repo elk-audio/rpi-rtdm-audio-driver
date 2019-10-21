@@ -35,8 +35,8 @@
 /**
  * Cv gate gpio pin definitions
  */
-#define 	NUM_OF_CV_OUTS	4
-#define 	NUM_OF_CV_INS	2
+#define 	NUM_OF_CVGATE_OUTS	4
+#define 	NUM_OF_CVGATE_INS	2
 #define	 	CV_GATE_OUT1	17
 #define 	CV_GATE_OUT2	27
 #define 	CV_GATE_OUT3	22
@@ -55,10 +55,10 @@ extern dma_cookie_t cookie_tx;
 extern dma_cookie_t cookie_rx;
 static uint64_t  new_wakeup, old_wakeup = 0, diff;
 
-static int cv_gate_out[NUM_OF_CV_OUTS] =
+static int cv_gate_out[NUM_OF_CVGATE_OUTS] =
  {CV_GATE_OUT1, CV_GATE_OUT2, CV_GATE_OUT3, CV_GATE_OUT4};
 
-static int cv_gate_in[NUM_OF_CV_INS] =
+static int cv_gate_in[NUM_OF_CVGATE_INS] =
  {CV_GATE_IN1, CV_GATE_IN2};
 
 void bcm2835_i2s_clear_fifos(struct rpi_audio_driver *dev,
@@ -117,18 +117,17 @@ void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd)
 	if (cmd == BCM2835_I2S_START_CMD) {
 		rpi_reg_update_bits(dev->base_addr,
 			BCM2835_I2S_CS_A_REG, mask, mask);
-		/*Assumption: According to my colleague Mr. Sharan Yagneswar the last two channels from pcm3168 are always zero &
+		/*Make sure channels are aligned in right order.
+		According to my colleague Mr. Sharan Yagneswar the last two channels from pcm3168 are always zero &
 		the probability of getting two successive zero values in any other two channels is as much as earth being hit by an asteroid
 		*/
 		while (samples[0] != 0 || samples[1] != 0) {
 			rpi_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG,
 					 &val);
 			if (val & BCM2835_I2S_RXD) {
-				wmb();
 				rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG,
 					 0x00);
 				samples[1] = samples[0];
-				rmb();
 				rpi_reg_read(dev->base_addr, BCM2835_I2S_FIFO_A_REG,
 					 &samples[0]);
 					 tmp[discarded] = samples[0];
@@ -165,13 +164,13 @@ static void bcm2835_i2s_dma_callback(void *data)
 	if (dev->wait_flag)
 	{
 		rtdm_event_signal(&dev->irq_event);
-		for (i = 0; i < NUM_OF_CV_OUTS; i++) {
+		for (i = 0; i < NUM_OF_CVGATE_OUTS; i++) {
 			val = (unsigned long) *dev->buffer->cv_gate_out &
 			 BIT(i);
 			gpio_set_value(cv_gate_out[i], val);
 		}
 		val = 0;
-		for (i = 0; i < NUM_OF_CV_INS; i++) {
+		for (i = 0; i < NUM_OF_CVGATE_INS; i++) {
 		val |= gpio_get_value(cv_gate_in[i]) << i;
 		}
 		*dev->buffer->cv_gate_in = val;
@@ -276,7 +275,7 @@ static int bcm2835_i2s_dma_setup(struct rpi_audio_driver *rpi_dev)
 
 static int bcm2835_init_cv_gates(void) {
 	int  i, ret;
-	for ( i = 0; i < NUM_OF_CV_OUTS; i++) {
+	for ( i = 0; i < NUM_OF_CVGATE_OUTS; i++) {
 		if ((ret = gpio_request(cv_gate_out[i], "cv_out_gate")) < 0) {
 			printk(KERN_ERR "audio_rtdm: failed to get cv out\n");
 			return ret;
@@ -287,7 +286,7 @@ static int bcm2835_init_cv_gates(void) {
 			return ret;
 		}
 	}
-	for ( i = 0; i < NUM_OF_CV_INS; i++) {
+	for ( i = 0; i < NUM_OF_CVGATE_INS; i++) {
 		if ((ret = gpio_request(cv_gate_in[i], "cv_in_gate")) < 0) {
 			printk(KERN_ERR "audio_rtdm: failed to get cv out\n");
 			return ret;
