@@ -21,6 +21,7 @@
 #define AUDIO_RTDM_VERSION_MIN	2
 #define AUDIO_RTDM_VERSION_VER	0
 
+#define DEFAULT_AUDIO_SAMPLING_RATE			48000
 #define DEFAULT_AUDIO_N_CHANNELS			8
 #define DEFAULT_AUDIO_N_FRAMES_PER_BUFFER		64
 #define NUM_OF_WORDS (audio_buffer_size * audio_channels)
