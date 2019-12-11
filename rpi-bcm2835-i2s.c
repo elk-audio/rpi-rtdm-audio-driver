@@ -56,7 +56,6 @@ module_param(audio_sampling_rate, uint, 0444);
 struct rpi_audio_driver *rpi_device_i2s;
 extern dma_cookie_t cookie_tx;
 extern dma_cookie_t cookie_rx;
-static uint64_t  new_wakeup, old_wakeup = 0, diff;
 
 static int cv_gate_out[NUM_OF_CVGATE_OUTS] =
  {CV_GATE_OUT1, CV_GATE_OUT2, CV_GATE_OUT3, CV_GATE_OUT4};
@@ -120,10 +119,9 @@ void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd)
 	if (cmd == BCM2835_I2S_START_CMD) {
 		rpi_reg_update_bits(dev->base_addr,
 			BCM2835_I2S_CS_A_REG, mask, mask);
-		/*Make sure channels are aligned in right order.
-		According to my colleague Mr. Sharan Yagneswar the last two channels from pcm3168 are always zero &
-		the probability of getting two successive zero values in any other two channels is as much as earth being hit by an asteroid
-		*/
+		/* Make sure channels are aligned in right order.
+		Last two channels from pcm3168 are always zero &
+		the probability of getting two successive zero values is nearly impossible */
 		while (samples[0] != 0 || samples[1] != 0) {
 			rpi_reg_read(dev->base_addr, BCM2835_I2S_CS_A_REG,
 					 &val);
