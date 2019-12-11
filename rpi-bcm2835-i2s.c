@@ -151,17 +151,6 @@ static void bcm2835_i2s_dma_callback(void *data)
 	uint32_t val;
 	struct rpi_audio_driver *dev = data;
 
-	new_wakeup = rtdm_clock_read_monotonic();
-	if (!old_wakeup) {
-		old_wakeup = new_wakeup;
-	} else {
-		diff = new_wakeup - old_wakeup;
-		if (diff < IRQ_FILTER_TIME_NS) {
-			return;
-		}
-		old_wakeup = new_wakeup;
-	}
-
 	dev->kinterrupts++;
 	dev->buffer_idx = ~(dev->buffer_idx) & 0x1;
 	if (dev->wait_flag)

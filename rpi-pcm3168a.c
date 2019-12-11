@@ -233,18 +233,18 @@ int rpi_pcm3168a_codec_init(void) {
 		return ret;
 	}
 	gpio_direction_output(SIKA_CPLD_RST, 1);
-	msleep(5);
-	gpio_direction_output(SIKA_CPLD_RST, 0);
 	gpio_direction_output(CODEC_RST_GPIO, 0);
 	msleep(5);
 	gpio_direction_output(CODEC_RST_GPIO, 1);
-	msleep(10);
+	msleep(5);
 	i2c_device_client = i2c_new_device(i2c_device_adapter, i2c_pcm3168a_board_info);
 
 	if (rpi_pcm3168a_config_codec(i2c_device_client)) {
 		printk(KERN_ERR "audio_rtdm: config_codec failed\n");
 		return -1;
 	}
+	msleep(5);
+	gpio_direction_output(SIKA_CPLD_RST, 0);
 	printk(KERN_INFO "audio_rtdm: codec configured\n");
 	return 0;
 }
