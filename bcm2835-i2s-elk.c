@@ -16,10 +16,8 @@
 #include <linux/slab.h>
 #include <linux/of_address.h>
 #include <linux/delay.h>
-#include <asm/barrier.h>
 #include <linux/spinlock.h>
 #include <rtdm/driver.h>
-#include <linux/ipipe_domain.h>
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
@@ -29,33 +27,23 @@
 #include <linux/mm.h>
 #include <linux/gpio.h>
 
-#include "rpi-bcm2835-i2s.h"
-#include "rpi-rtdm-audio.h"
+#include "pcm3168a-elk.h"
+#include "bcm2835-i2s-elk.h"
 
 /**
  * Cv gate gpio pin definitions
  */
 #define 	NUM_OF_CVGATE_OUTS	4
 #define 	NUM_OF_CVGATE_INS	2
-#define	 	CV_GATE_OUT1	17
-#define 	CV_GATE_OUT2	27
-#define 	CV_GATE_OUT3	22
-#define 	CV_GATE_OUT4	23
-#define 	CV_GATE_IN1	24
-#define 	CV_GATE_IN2	25
+#define	 	CV_GATE_OUT1		17
+#define 	CV_GATE_OUT2		27
+#define 	CV_GATE_OUT3		22
+#define 	CV_GATE_OUT4		23
+#define 	CV_GATE_IN1		24
+#define 	CV_GATE_IN2		25
 
-static uint audio_buffer_size = DEFAULT_AUDIO_N_FRAMES_PER_BUFFER;
-module_param(audio_buffer_size, uint, 0644);
 
-static uint audio_channels = DEFAULT_AUDIO_N_CHANNELS;
-module_param(audio_channels, uint, 0644);
-
-static uint audio_sampling_rate = DEFAULT_AUDIO_SAMPLING_RATE;
-module_param(audio_sampling_rate, uint, 0444);
-
-struct rpi_audio_driver *rpi_device_i2s;
-extern dma_cookie_t cookie_tx;
-extern dma_cookie_t cookie_rx;
+static struct bcm2835_i2s_dev *bcm2835_i2s_static_dev;
 
 static int cv_gate_out[NUM_OF_CVGATE_OUTS] =
  {CV_GATE_OUT1, CV_GATE_OUT2, CV_GATE_OUT3, CV_GATE_OUT4};
@@ -63,7 +51,43 @@ static int cv_gate_out[NUM_OF_CVGATE_OUTS] =
 static int cv_gate_in[NUM_OF_CVGATE_INS] =
  {CV_GATE_IN1, CV_GATE_IN2};
 
-void bcm2835_i2s_clear_fifos(struct rpi_audio_driver *dev,
+rtdm_task_t 			*i2s_task;
+#define NUM_OF_WORDS (64 * 8)
+static void i2s_loopback_task(void *ctx)
+{
+	struct bcm2835_i2s_dev *dev = ctx;
+	int i, idx, underrun;
+	static int pos = 0;
+	static int *txbuf, *rxbuf;
+	struct bcm2835_i2s_buffers *i2s_buffer = dev->buffer;
+	txbuf = (int *) i2s_buffer->tx_buf;
+	rxbuf = (int *) i2s_buffer->rx_buf;
+	static unsigned long  i2s_interrupts = 0;
+	printk("i2s_loopback_task: started\n");
+	while(!rtdm_task_should_stop()) {
+		rtdm_event_wait(&dev->irq_event);
+		i2s_interrupts = dev->kinterrupts;
+
+		idx = ~(dev->buffer_idx) & 0x1;
+
+		pos = NUM_OF_WORDS * idx;
+		for (i = 0; i < NUM_OF_WORDS; i+=8) {
+				txbuf[i + pos] = rxbuf[i + pos];
+				txbuf[i + pos + 1] = rxbuf[i + pos + 1];
+				txbuf[i + pos + 2] = rxbuf[i + pos + 2];
+				txbuf[i + pos + 3] = rxbuf[i + pos + 3];
+				txbuf[i + pos + 4] = rxbuf[i + pos + 4];
+				txbuf[i + pos + 5] = rxbuf[i + pos + 5];
+				txbuf[i + pos + 6] = rxbuf[i + pos + 4];
+				txbuf[i + pos + 7] = rxbuf[i + pos + 5];
+		}
+		underrun = i2s_interrupts - dev->kinterrupts;
+		if (underrun)
+			printk(" under-run !! of %d\n",underrun);
+	}
+}
+
+void bcm2835_i2s_clear_fifos(struct bcm2835_i2s_dev *dev,
 				    bool tx, bool rx)
 {
 	uint32_t csreg, sync;
@@ -109,7 +133,7 @@ void bcm2835_i2s_clear_fifos(struct rpi_audio_driver *dev,
 			BCM2835_I2S_RXON | BCM2835_I2S_TXON, i2s_active_state);
 }
 
-void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd)
+void bcm2835_i2s_start_stop(struct bcm2835_i2s_dev *dev, int cmd)
 {
 	uint32_t mask, val, discarded = 0;
 	int32_t tmp[9], samples[2] = {0xff, 0xff};
@@ -135,7 +159,8 @@ void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd)
 					 discarded++;
 			}
 		}
-		printk(KERN_INFO "audio_rtdm: %d sampls discarded\n",discarded);
+		printk(KERN_INFO "bcm2835-i2s-elk: %d sampls discarded\n",
+								discarded);
 	}
 	else {
 		rpi_reg_update_bits(dev->base_addr,
@@ -147,7 +172,7 @@ static void bcm2835_i2s_dma_callback(void *data)
 {
 	int i;
 	uint32_t val;
-	struct rpi_audio_driver *dev = data;
+	struct bcm2835_i2s_dev *dev = data;
 
 	dev->kinterrupts++;
 	dev->buffer_idx = ~(dev->buffer_idx) & 0x1;
@@ -168,14 +193,14 @@ static void bcm2835_i2s_dma_callback(void *data)
 }
 
 static struct dma_async_tx_descriptor *
-bcm2835_i2s_dma_prepare_cyclic(struct rpi_audio_driver *dev,
+bcm2835_i2s_dma_prepare_cyclic(struct bcm2835_i2s_dev *dev,
 			enum dma_transfer_direction dir)
 {
 	struct dma_slave_config cfg;
 	struct dma_chan *chan;
 	int  flags;
 	struct dma_async_tx_descriptor * desc;
-	struct rpi_buffers_info *audio_buffers = dev->buffer;
+	struct bcm2835_i2s_buffers *audio_buffers = dev->buffer;
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.direction = dir;
@@ -210,7 +235,7 @@ bcm2835_i2s_dma_prepare_cyclic(struct rpi_audio_driver *dev,
 	return desc;
 }
 
-static int bcm2835_i2s_dma_prepare(struct rpi_audio_driver *dev)
+static int bcm2835_i2s_dma_prepare(struct bcm2835_i2s_dev *dev)
 {
 	int err;
 	dev->tx_desc = bcm2835_i2s_dma_prepare_cyclic(dev, DMA_MEM_TO_DEV);
@@ -234,16 +259,16 @@ static int bcm2835_i2s_dma_prepare(struct rpi_audio_driver *dev)
 	return 0;
 }
 
-static void bcm2835_i2s_submit_dma(struct rpi_audio_driver *dev)
+static void bcm2835_i2s_submit_dma(struct bcm2835_i2s_dev *dev)
 {
-	cookie_rx = dmaengine_submit(dev->rx_desc);
-	cookie_tx = dmaengine_submit(dev->tx_desc);
+	dmaengine_submit(dev->rx_desc);
+	dmaengine_submit(dev->tx_desc);
 
 	dma_async_issue_pending(dev->dma_rx);
 	dma_async_issue_pending(dev->dma_tx);
 }
 
-static int bcm2835_i2s_dma_setup(struct rpi_audio_driver *rpi_dev)
+static int bcm2835_i2s_dma_setup(struct bcm2835_i2s_dev *rpi_dev)
 {
 	struct device *dev = (struct device*) rpi_dev->dev;
 
@@ -290,7 +315,7 @@ static int bcm2835_init_cv_gates(void) {
 	return ret;
 }
 
-static void bcm2835_i2s_configure(struct rpi_audio_driver * dev)
+static void bcm2835_i2s_configure(struct bcm2835_i2s_dev * dev)
 {
 	unsigned int data_length, framesync_length;
 	unsigned int slots, slot_width;
@@ -358,7 +383,7 @@ static void bcm2835_i2s_configure(struct rpi_audio_driver * dev)
 			| BCM2835_I2S_RX(BCM2835_DMA_THR_RX), 0xffffffff);
 }
 
-void bcm2835_i2s_enable(struct rpi_audio_driver *dev)
+void bcm2835_i2s_enable(struct bcm2835_i2s_dev *dev)
 {
 	/* Disable RAM STBY */
 	rpi_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG,
@@ -372,7 +397,7 @@ void bcm2835_i2s_enable(struct rpi_audio_driver *dev)
 			BCM2835_I2S_EN , BCM2835_I2S_EN);
 }
 
-static void bcm2835_i2s_clear_regs(struct rpi_audio_driver *dev)
+static void bcm2835_i2s_clear_regs(struct bcm2835_i2s_dev *dev)
 {
 	rpi_reg_write(dev->base_addr, BCM2835_I2S_CS_A_REG, 0);
 	rpi_reg_write(dev->base_addr, BCM2835_I2S_MODE_A_REG, 0);
@@ -384,23 +409,99 @@ static void bcm2835_i2s_clear_regs(struct rpi_audio_driver *dev)
 	rpi_reg_write(dev->base_addr, BCM2835_I2S_GRAY_REG, 0);
 }
 
-int bcm2835_i2s_init(struct platform_device *pdev)
+struct bcm2835_i2s_dev *bcm2835_i2s_init(int audio_buffer_size,
+						 int audio_channels)
 {
-	int i;
-	struct rpi_audio_driver *dev;
+	int ret, i;
+	dma_addr_t dummy_phys_addr;
+	struct bcm2835_i2s_dev *dev = bcm2835_i2s_static_dev;
+	struct bcm2835_i2s_buffers *audio_buffer = dev->buffer;
+
+	audio_buffer->rx_buf = dma_zalloc_coherent(dev->dma_rx->device->dev,
+				NUM_OF_PAGES * PAGE_SIZE, &dummy_phys_addr,
+				GFP_KERNEL);
+	if (!audio_buffer->rx_buf ) {
+		printk(KERN_ERR "couldn't allocate coherent_mem\n");
+		return NULL;
+	}
+	audio_buffer->rx_phys_addr = dummy_phys_addr;
+	audio_buffer->period_len = audio_buffer_size * audio_channels
+					 * sizeof(uint32_t);
+	audio_buffer->buffer_len = 2 * audio_buffer->period_len;
+	audio_buffer->tx_buf = audio_buffer->rx_buf +
+			audio_buffer->buffer_len;
+	audio_buffer->tx_phys_addr = dummy_phys_addr + audio_buffer->buffer_len;
+	audio_buffer->cv_gate_out = audio_buffer->rx_buf +
+			audio_buffer->buffer_len * 2;
+	audio_buffer->cv_gate_in = audio_buffer->rx_buf +
+			audio_buffer->buffer_len * 2 + sizeof(uint32_t);
+	*audio_buffer->cv_gate_out = 0x0f;
+
+	i2s_task = kcalloc(1,sizeof(rtdm_task_t), GFP_KERNEL);
+
+	ret = bcm2835_i2s_dma_prepare(dev);
+	if (ret) {
+		printk(KERN_ERR "bcm2835_i2s_dma_prepare failed!\n");
+		return NULL;
+	}
+
+	bcm2835_i2s_enable(dev);
+
+	bcm2835_i2s_clear_fifos(dev, true, true);
+
+	for (i = 0; i < (BCM2835_DMA_THR_TX + audio_channels); i++)
+		rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
+
+	msleep(10);
+	bcm2835_i2s_submit_dma(dev);
+	msleep(50);
+	bcm2835_i2s_start_stop(dev, BCM2835_I2S_START_CMD);
+	ret = rtdm_task_init(i2s_task,
+					 "i2s_driver_task",
+					i2s_loopback_task, dev,
+					95, 0);
+	if (ret) {
+		printk("i2s_init: rtdm_task_init failed\n");
+		return NULL;
+	}
+	return dev;
+}
+
+int bcm2835_i2s_exit(struct bcm2835_i2s_dev *dev)
+{
+	int ret = 0;
+	if ( (ret = dmaengine_terminate_async(dev->dma_tx)) < 0) {
+		printk("dmaengine_terminate_async failed\n");
+		return ret;
+	}
+	if ( (ret = dmaengine_terminate_async(dev->dma_rx)) < 0) {
+		printk("dmaengine_terminate_async failed\n");
+		return ret;
+	}
+	dma_free_coherent(dev->dma_rx->device->dev,
+				NUM_OF_PAGES * PAGE_SIZE, dev->buffer->rx_buf,
+				dev->buffer->rx_phys_addr);
+	dma_release_channel(dev->dma_tx);
+	dma_release_channel(dev->dma_rx);
+	return 0;
+}
+
+int bcm2835_i2s_probe(struct platform_device *pdev)
+{
+	struct bcm2835_i2s_dev *dev, *dummy_dev = NULL;
 	int ret = 0;
 	struct resource *mem_resource;
 	void __iomem *base;
 	const __be32 *addr;
-	dma_addr_t dma_base, dummy_phys_addr;
-	struct rpi_buffers_info *audio_buffer;
+	dma_addr_t dma_base;
+	struct bcm2835_i2s_buffers *audio_buffer;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev),
 			   GFP_KERNEL);
 	if (!dev)
 		return -ENOMEM;
 
-	rpi_device_i2s = dev;
+	bcm2835_i2s_static_dev = dev;
 
 	mem_resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	base = devm_ioremap_resource(&pdev->dev, mem_resource);
@@ -430,7 +531,7 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 	if (bcm2835_i2s_dma_setup(dev))
 		return -ENODEV;
 
-	audio_buffer = kcalloc(1, sizeof(struct rpi_buffers_info),
+	audio_buffer = kcalloc(1, sizeof(struct bcm2835_i2s_buffers),
 		GFP_KERNEL);
 
 	if (!audio_buffer) {
@@ -438,57 +539,43 @@ int bcm2835_i2s_init(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 	dev->buffer = audio_buffer;
-	audio_buffer->rx_buf = dma_zalloc_coherent(dev->dma_rx->device->dev,
-				NUM_OF_PAGES * PAGE_SIZE, &dummy_phys_addr,
-				GFP_KERNEL);
-	if (!audio_buffer->rx_buf ) {
-		dev_err(&pdev->dev, "couldn't allocate coherent_mem\n");
-		return -ENOMEM;
-	}
-	audio_buffer->rx_phys_addr = dummy_phys_addr;
-	audio_buffer->period_len = NUM_OF_WORDS * sizeof(uint32_t);
-	audio_buffer->buffer_len = 2 * audio_buffer->period_len;
-	audio_buffer->tx_buf = audio_buffer->rx_buf +
-			audio_buffer->buffer_len;
-	audio_buffer->tx_phys_addr = dummy_phys_addr + audio_buffer->buffer_len;
-	audio_buffer->cv_gate_out = audio_buffer->rx_buf +
-			audio_buffer->buffer_len * 2;
-	audio_buffer->cv_gate_in = audio_buffer->rx_buf +
-			audio_buffer->buffer_len * 2 + sizeof(uint32_t);
-	*audio_buffer->cv_gate_out = 0x0f;
-
-	ret = bcm2835_i2s_dma_prepare(dev);
-	if (ret)
-		dev_err(&pdev->dev,"bcm2835_i2s_dma_prepare failed!\n");
-
-	bcm2835_i2s_enable(dev);
-
-	bcm2835_i2s_clear_fifos(dev, true, true);
-
-	for (i = 0; i < (BCM2835_DMA_THR_TX + DEFAULT_AUDIO_N_CHANNELS); i++)
-		rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
-
-	msleep(10);
-
-	bcm2835_i2s_submit_dma(dev);
-	msleep(500);
-	bcm2835_i2s_start_stop(dev, BCM2835_I2S_START_CMD);
-
+	pcm3168a_codec_init();
+	dummy_dev = bcm2835_i2s_init(64, 8);
+	
+	printk("dummy_dev = %p\n",dummy_dev);
+	msleep(1000);
+	dummy_dev->wait_flag = 1;
 	return ret;
 }
 
-void bcm2835_i2s_exit(struct platform_device *pdev)
-{
-	struct rpi_buffers_info *audio_buffers = rpi_device_i2s->buffer;
-	dmaengine_terminate_async(rpi_device_i2s->dma_tx);
-	dmaengine_terminate_async(rpi_device_i2s->dma_rx);
-	bcm2835_i2s_start_stop(rpi_device_i2s, BCM2835_I2S_STOP_CMD);
-	devm_iounmap(&pdev->dev, (void *)rpi_device_i2s->base_addr);
-	dma_free_coherent(rpi_device_i2s->dma_rx->device->dev,
-				NUM_OF_PAGES * PAGE_SIZE, audio_buffers->rx_buf,
-				audio_buffers->rx_phys_addr);
-	dma_release_channel(rpi_device_i2s->dma_tx);
-	dma_release_channel(rpi_device_i2s->dma_rx);
+static int bcm2835_i2s_remove(struct platform_device *pdev) {
+	struct bcm2835_i2s_buffers *audio_buffers = 
+					bcm2835_i2s_static_dev->buffer;
+	
+	bcm2835_i2s_start_stop(bcm2835_i2s_static_dev, BCM2835_I2S_STOP_CMD);
 	kfree(audio_buffers);
-	devm_kfree(&pdev->dev, (void *)rpi_device_i2s);
+	devm_iounmap(&pdev->dev, (void *)bcm2835_i2s_static_dev->base_addr);
+	devm_kfree(&pdev->dev, (void *)bcm2835_i2s_static_dev);
+	return 0;
 }
+
+static const struct of_device_id bcm2835_i2s_of_match[] = {
+	{ .compatible = "brcm,bcm2835-i2s", },
+	{},
+};
+
+MODULE_DEVICE_TABLE(of, bcm2835_i2s_of_match);
+
+static struct platform_driver bcm2835_i2s_driver = {
+	.probe		= bcm2835_i2s_probe,
+	.remove		= bcm2835_i2s_remove,
+	.driver		= {
+		.name	= "bcm2835-i2s",
+		.of_match_table = bcm2835_i2s_of_match,
+	},
+};
+
+module_platform_driver(bcm2835_i2s_driver);
+MODULE_DESCRIPTION("BCM2835 I2S interface for ELK Pi");
+MODULE_AUTHOR("Nitin Kulkarni");
+MODULE_LICENSE("GPL v2");

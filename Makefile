@@ -1,5 +1,5 @@
-obj-m += audio_rtdm.o
-audio_rtdm-objs := rpi-rtdm-audio.o rpi-pcm3168a.o rpi-bcm2835-i2s.o
+obj-m += pcm3168a-elk.o
+obj-m += bcm2835-i2s-elk.o
 
 all:
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=${CROSS_COMPILE} -C $(KERNEL_PATH) M=$(PWD) modules

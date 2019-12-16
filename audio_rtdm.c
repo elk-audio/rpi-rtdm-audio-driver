@@ -44,6 +44,15 @@ module_param(audio_ver_min, uint, 0644);
 static uint audio_ver_rev = AUDIO_RTDM_VERSION_VER;
 module_param(audio_ver_rev, uint, 0644);
 
+static uint audio_buffer_size = DEFAULT_AUDIO_N_FRAMES_PER_BUFFER;
+module_param(audio_buffer_size, uint, 0644);
+
+static uint audio_channels = DEFAULT_AUDIO_N_CHANNELS;
+module_param(audio_channels, uint, 0644);
+
+static uint audio_sampling_rate = DEFAULT_AUDIO_SAMPLING_RATE;
+module_param(audio_sampling_rate, uint, 0444);
+
 struct audio_dev_context {
 	ipipe_spinlock_t lock;
 	struct rpi_audio_driver *i2s_dev;
@@ -52,8 +61,6 @@ struct audio_dev_context {
 };
 
 extern struct rpi_audio_driver *rpi_device_i2s;
-dma_cookie_t cookie_tx;
-dma_cookie_t cookie_rx;
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags) {
 	struct audio_dev_context *dev_context;
@@ -206,21 +213,3 @@ static int audio_rtdm_driver_remove(struct platform_device *pdev) {
 	rtdm_dev_unregister(&rtdm_audio_device);
 	return 0;
 }
-
-static const struct of_device_id rpi_i2s_of_match[] = {
-	{ .compatible = "brcm,bcm2835-i2s", },
-	{},
-};
-
-MODULE_DEVICE_TABLE(of, rpi_i2s_of_match);
-
-static struct platform_driver rpi_i2s_rtdm_driver = {
-	.probe		= audio_rtdm_driver_probe,
-	.remove		= audio_rtdm_driver_remove,
-	.driver		= {
-		.name	= "bcm2835-i2s",
-		.of_match_table = rpi_i2s_of_match,
-	},
-};
-
-module_platform_driver(rpi_i2s_rtdm_driver);

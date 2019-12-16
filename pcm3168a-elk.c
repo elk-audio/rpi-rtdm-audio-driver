@@ -1,7 +1,7 @@
 /**
  * @file rpi-rtdm-i2c.c
  * @author Nitin Kulkarni (nitin.kulkarni@mindmusiclabs.com)
- * @brief 
+ * @brief The PCM168a codec driver for ELK  PI. A lot of stuff is hardcoded for *	now, idea is to make it runtime configurable ideally. This module is  	*	based on the mainline pcm3168a driver by Damien Horsley.
  * @version 0.1
  * @date 2019-06-11
  * 
@@ -15,13 +15,12 @@
 #include <rtdm/rtdm.h>
 #include <linux/interrupt.h>
 
-#include "rpi-pcm3168a.h"
+#include "pcm3168a-elk.h"
 
-#define CODEC_RST_GPIO  16
-#define SIKA_CPLD_RST 	4
-#define I2C_BUS_NUM	1
+#define PCM3168A_CODEC_RST_PIN  16
+#define PCM3168A_CPLD_RST_PIN 	4
+#define PCM3168A_I2C_BUS_NUM	1
 
-static struct i2c_adapter* i2c_device_adapter;
 static struct i2c_client* i2c_device_client;
 
 static uint8_t clkgen_reg_val_lookup[CLKGEN_NUM_OF_REGS][2] =
@@ -83,7 +82,7 @@ static struct i2c_board_info i2c_pcm3168a_board_info[] =  {
 	}
 };
 
-static int rpi_config_clk_gen(struct i2c_client* i2c_client_dev) {
+static int pcm3168a_config_clk_gen(struct i2c_client* i2c_client_dev) {
 	char cmd[2];
 	int i, ret = 0;
 
@@ -123,7 +122,7 @@ static int rpi_config_clk_gen(struct i2c_client* i2c_client_dev) {
 	return 0;
 }
 
-static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
+static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 	char cmd[2];
 	int ret;
 
@@ -215,44 +214,61 @@ static int rpi_pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 	return 0;
 }
 
-int rpi_pcm3168a_codec_init(void) {
+int pcm3168a_codec_init(void) {
 	int ret;
-	// Setup device
-	i2c_device_adapter = i2c_get_adapter(I2C_BUS_NUM);
-	i2c_device_client = i2c_new_device(i2c_device_adapter, i2c_clkgen_board_info);
+	struct i2c_adapter *adapter = i2c_get_adapter(PCM3168A_I2C_BUS_NUM);
+	struct i2c_client *client = i2c_new_device
+					(adapter, i2c_clkgen_board_info);
 
-	if (rpi_config_clk_gen(i2c_device_client))
-		printk(KERN_ERR "audio_rtdm: rpi_config_clk_gen failed\n");
+	if (pcm3168a_config_clk_gen(client))
+		printk(KERN_ERR "pcm3168a-elk: rpi_config_clk_gen failed\n");
 
-	if ((ret = gpio_request(CODEC_RST_GPIO, "CODEC_RST")) < 0) {
-		printk(KERN_ERR "audio_rtdm: Failed to get CODEC_RST_GPIO\n");
+	if ((ret = gpio_request(PCM3168A_CODEC_RST_PIN, "CODEC_RST")) < 0) {
+		printk(KERN_ERR "pcm3168a-elk: Failed to get CODEC_RST_GPIO\n");
 		return ret;
 	}
-	if ((ret = gpio_request(SIKA_CPLD_RST, "SIKA_RST")) < 0) {
-		printk(KERN_ERR "audio_rtdm: Failed to get SIKA_RST\n");
+	if ((ret = gpio_request(PCM3168A_CPLD_RST_PIN, "SIKA_RST")) < 0) {
+		printk(KERN_ERR "pcm3168a-elk: Failed to get SIKA_RST\n");
 		return ret;
 	}
-	gpio_direction_output(SIKA_CPLD_RST, 1);
-	gpio_direction_output(CODEC_RST_GPIO, 0);
+	gpio_direction_output(PCM3168A_CPLD_RST_PIN, 1);
+	gpio_direction_output(PCM3168A_CODEC_RST_PIN, 0);
 	msleep(5);
-	gpio_direction_output(CODEC_RST_GPIO, 1);
+	gpio_direction_output(PCM3168A_CODEC_RST_PIN, 1);
 	msleep(5);
-	i2c_device_client = i2c_new_device(i2c_device_adapter, i2c_pcm3168a_board_info);
-
-	if (rpi_pcm3168a_config_codec(i2c_device_client)) {
-		printk(KERN_ERR "audio_rtdm: config_codec failed\n");
+	i2c_unregister_device(client);
+	client = i2c_new_device(adapter,i2c_pcm3168a_board_info);
+	if (pcm3168a_config_codec(client)) {
+		printk(KERN_ERR "pcm31681-elk: config_codec failed\n");
 		return -1;
 	}
 	msleep(5);
-	gpio_direction_output(SIKA_CPLD_RST, 0);
-	printk(KERN_INFO "audio_rtdm: codec configured\n");
+	gpio_direction_output(PCM3168A_CPLD_RST_PIN, 0);
+	printk(KERN_INFO "pcm31681-elk: codec configured\n");
+	return 0;
+}
+EXPORT_SYMBOL_GPL(pcm3168a_codec_init);
+
+void pcm3168a_codec_exit(void) {
+	printk(KERN_INFO "pcm31681-elk: unregister i2c-client\n");
+	i2c_unregister_device(i2c_device_client);
+	gpio_free(PCM3168A_CODEC_RST_PIN);
+	gpio_free(PCM3168A_CPLD_RST_PIN);
+}
+EXPORT_SYMBOL_GPL(pcm3168a_codec_exit);
+
+int pcm3168a_init(void) {
+	printk(KERN_INFO "pcm31681-elk: module init\n");
 	return 0;
 }
 
-int rpi_pcm3168a_codec_exit(void) {
-	printk(KERN_INFO "i2c-exit: unregister i2c-client\n");
-	i2c_unregister_device(i2c_device_client);
-	gpio_free(CODEC_RST_GPIO);
-	gpio_free(SIKA_CPLD_RST);
-	return 0;
+void pcm3168a_exit(void) {
+	printk(KERN_INFO "pcm31681-elk: module exit\n");
 }
+
+module_init(pcm3168a_init)
+module_exit(pcm3168a_exit)
+
+MODULE_DESCRIPTION("PCM3168A I2C codec driver for ELK Pi");
+MODULE_AUTHOR("Nitin Kulkarni");
+MODULE_LICENSE("GPL v2");

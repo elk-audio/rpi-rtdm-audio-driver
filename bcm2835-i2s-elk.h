@@ -105,6 +105,7 @@
 
 /* Frame length register is 10 bit, maximum length 1024 */
 #define BCM2835_I2S_MAX_FRAME_LENGTH	1024
+#define NUM_OF_PAGES			20
 
 static inline void rpi_reg_write(void *base_addr, uint32_t reg_addr,
 				uint32_t value)
@@ -131,7 +132,7 @@ static inline void rpi_reg_read(void *base_addr, uint32_t reg_addr,
 	*value = *reg;
 }
 
-struct rpi_buffers_info {
+struct bcm2835_i2s_buffers {
 	uint32_t 	 	*cv_gate_out;
 	uint32_t 	 	*cv_gate_in;
 	void			*tx_buf;
@@ -143,7 +144,7 @@ struct rpi_buffers_info {
 };
 
 /* General device struct */
-struct rpi_audio_driver {
+struct bcm2835_i2s_dev {
 	struct device			*dev;
 	void __iomem			*base_addr;
 	struct dma_chan			*dma_tx;
@@ -153,7 +154,7 @@ struct rpi_audio_driver {
 	dma_addr_t			fifo_dma_addr;
 	unsigned			addr_width;
 	unsigned			dma_burst_size;
-	struct rpi_buffers_info		*buffer;
+	struct bcm2835_i2s_buffers		*buffer;
 	rtdm_event_t 			irq_event;
 	unsigned			wait_flag;
 	unsigned			buffer_idx;
@@ -162,10 +163,8 @@ struct rpi_audio_driver {
 
 #define MAX_DMA_LEN		SZ_64K
 
-int bcm2835_i2s_init(struct platform_device *pdev);
-void bcm2835_i2s_exit(struct platform_device *pdev);
-void bcm2835_i2s_clear_fifos(struct rpi_audio_driver *dev,
-				    bool tx, bool rx);
-void bcm2835_i2s_start_stop(struct rpi_audio_driver *dev, int cmd);
+struct bcm2835_i2s_dev *bcm2835_i2s_init(int audio_buffer_size,
+						 int audio_channels);
+int bcm2835_i2s_exit(struct bcm2835_i2s_dev *dev);
 
 #endif
