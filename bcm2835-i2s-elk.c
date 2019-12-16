@@ -12,7 +12,6 @@
 #include <linux/platform_device.h>
 #include <linux/device.h>
 #include <linux/clk.h>
-#include <linux/types.h>
 #include <linux/slab.h>
 #include <linux/of_address.h>
 #include <linux/delay.h>
@@ -21,10 +20,8 @@
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
-#include <linux/string.h>
 #include <linux/interrupt.h>
 #include <asm/io.h>
-#include <linux/mm.h>
 #include <linux/gpio.h>
 
 #include "pcm3168a-elk.h"
@@ -50,42 +47,6 @@ static int cv_gate_out[NUM_OF_CVGATE_OUTS] =
 
 static int cv_gate_in[NUM_OF_CVGATE_INS] =
  {CV_GATE_IN1, CV_GATE_IN2};
-
-rtdm_task_t 			*i2s_task;
-#define NUM_OF_WORDS (64 * 8)
-static void i2s_loopback_task(void *ctx)
-{
-	struct bcm2835_i2s_dev *dev = ctx;
-	int i, idx, underrun;
-	static int pos = 0;
-	static int *txbuf, *rxbuf;
-	struct bcm2835_i2s_buffers *i2s_buffer = dev->buffer;
-	txbuf = (int *) i2s_buffer->tx_buf;
-	rxbuf = (int *) i2s_buffer->rx_buf;
-	static unsigned long  i2s_interrupts = 0;
-	printk("i2s_loopback_task: started\n");
-	while(!rtdm_task_should_stop()) {
-		rtdm_event_wait(&dev->irq_event);
-		i2s_interrupts = dev->kinterrupts;
-
-		idx = ~(dev->buffer_idx) & 0x1;
-
-		pos = NUM_OF_WORDS * idx;
-		for (i = 0; i < NUM_OF_WORDS; i+=8) {
-				txbuf[i + pos] = rxbuf[i + pos];
-				txbuf[i + pos + 1] = rxbuf[i + pos + 1];
-				txbuf[i + pos + 2] = rxbuf[i + pos + 2];
-				txbuf[i + pos + 3] = rxbuf[i + pos + 3];
-				txbuf[i + pos + 4] = rxbuf[i + pos + 4];
-				txbuf[i + pos + 5] = rxbuf[i + pos + 5];
-				txbuf[i + pos + 6] = rxbuf[i + pos + 4];
-				txbuf[i + pos + 7] = rxbuf[i + pos + 5];
-		}
-		underrun = i2s_interrupts - dev->kinterrupts;
-		if (underrun)
-			printk(" under-run !! of %d\n",underrun);
-	}
-}
 
 void bcm2835_i2s_clear_fifos(struct bcm2835_i2s_dev *dev,
 				    bool tx, bool rx)
@@ -176,8 +137,7 @@ static void bcm2835_i2s_dma_callback(void *data)
 
 	dev->kinterrupts++;
 	dev->buffer_idx = ~(dev->buffer_idx) & 0x1;
-	if (dev->wait_flag)
-	{
+	if (dev->wait_flag) {
 		rtdm_event_signal(&dev->irq_event);
 		for (i = 0; i < NUM_OF_CVGATE_OUTS; i++) {
 			val = (unsigned long) *dev->buffer->cv_gate_out &
@@ -409,8 +369,7 @@ static void bcm2835_i2s_clear_regs(struct bcm2835_i2s_dev *dev)
 	rpi_reg_write(dev->base_addr, BCM2835_I2S_GRAY_REG, 0);
 }
 
-struct bcm2835_i2s_dev *bcm2835_i2s_init(int audio_buffer_size,
-						 int audio_channels)
+int bcm2835_i2s_init(int audio_buffer_size, int audio_channels)
 {
 	int ret, i;
 	dma_addr_t dummy_phys_addr;
@@ -422,7 +381,7 @@ struct bcm2835_i2s_dev *bcm2835_i2s_init(int audio_buffer_size,
 				GFP_KERNEL);
 	if (!audio_buffer->rx_buf ) {
 		printk(KERN_ERR "couldn't allocate coherent_mem\n");
-		return NULL;
+		return -ENOMEM;
 	}
 	audio_buffer->rx_phys_addr = dummy_phys_addr;
 	audio_buffer->period_len = audio_buffer_size * audio_channels
@@ -437,12 +396,10 @@ struct bcm2835_i2s_dev *bcm2835_i2s_init(int audio_buffer_size,
 			audio_buffer->buffer_len * 2 + sizeof(uint32_t);
 	*audio_buffer->cv_gate_out = 0x0f;
 
-	i2s_task = kcalloc(1,sizeof(rtdm_task_t), GFP_KERNEL);
-
 	ret = bcm2835_i2s_dma_prepare(dev);
 	if (ret) {
 		printk(KERN_ERR "bcm2835_i2s_dma_prepare failed!\n");
-		return NULL;
+		return -EINVAL;
 	}
 
 	bcm2835_i2s_enable(dev);
@@ -456,20 +413,21 @@ struct bcm2835_i2s_dev *bcm2835_i2s_init(int audio_buffer_size,
 	bcm2835_i2s_submit_dma(dev);
 	msleep(50);
 	bcm2835_i2s_start_stop(dev, BCM2835_I2S_START_CMD);
-	ret = rtdm_task_init(i2s_task,
-					 "i2s_driver_task",
-					i2s_loopback_task, dev,
-					95, 0);
-	if (ret) {
-		printk("i2s_init: rtdm_task_init failed\n");
-		return NULL;
-	}
-	return dev;
-}
 
-int bcm2835_i2s_exit(struct bcm2835_i2s_dev *dev)
+	return 0;
+}
+EXPORT_SYMBOL_GPL(bcm2835_i2s_init);
+
+struct bcm2835_i2s_dev *bcm2835_get_i2s_dev(void)
+{
+	return bcm2835_i2s_static_dev;
+}
+EXPORT_SYMBOL_GPL(bcm2835_get_i2s_dev);
+
+int bcm2835_i2s_exit(void)
 {
 	int ret = 0;
+	struct bcm2835_i2s_dev *dev = bcm2835_i2s_static_dev;
 	if ( (ret = dmaengine_terminate_async(dev->dma_tx)) < 0) {
 		printk("dmaengine_terminate_async failed\n");
 		return ret;
@@ -485,10 +443,11 @@ int bcm2835_i2s_exit(struct bcm2835_i2s_dev *dev)
 	dma_release_channel(dev->dma_rx);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(bcm2835_i2s_exit);
 
 int bcm2835_i2s_probe(struct platform_device *pdev)
 {
-	struct bcm2835_i2s_dev *dev, *dummy_dev = NULL;
+	struct bcm2835_i2s_dev *dev;
 	int ret = 0;
 	struct resource *mem_resource;
 	void __iomem *base;
@@ -539,12 +498,6 @@ int bcm2835_i2s_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 	dev->buffer = audio_buffer;
-	pcm3168a_codec_init();
-	dummy_dev = bcm2835_i2s_init(64, 8);
-	
-	printk("dummy_dev = %p\n",dummy_dev);
-	msleep(1000);
-	dummy_dev->wait_flag = 1;
 	return ret;
 }
 

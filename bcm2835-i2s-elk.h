@@ -163,8 +163,9 @@ struct bcm2835_i2s_dev {
 
 #define MAX_DMA_LEN		SZ_64K
 
-struct bcm2835_i2s_dev *bcm2835_i2s_init(int audio_buffer_size,
+extern int bcm2835_i2s_init(int audio_buffer_size,
 						 int audio_channels);
-int bcm2835_i2s_exit(struct bcm2835_i2s_dev *dev);
+extern int bcm2835_i2s_exit(void);
+extern struct bcm2835_i2s_dev *bcm2835_get_i2s_dev(void);
 
 #endif
