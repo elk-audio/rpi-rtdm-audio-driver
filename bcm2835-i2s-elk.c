@@ -4,9 +4,9 @@
  * @brief I2S module of theRTDM audio driver.
  * A lot of stuff is based on the mainline I2S module by Florian Meier
  * @version 0.1
- * @date 2019-06-11
  * 
- * @copyright MIND music labs (c) 2019
+ * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
+ * Stockholm
  * 
  */
 #include <linux/platform_device.h>

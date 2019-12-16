@@ -3,9 +3,9 @@
  * @author Nitin Kulkarni (nitin.kulkarni@mindmusiclabs.com)
  * @brief 
  * @version 0.1
- * @date 2019-06-11
  * 
- * @copyright MIND Music Labs (c) 2019
+ * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
+ * Stockholm
  * 
  */
 #ifndef RPI_BCM2835_I2S_H

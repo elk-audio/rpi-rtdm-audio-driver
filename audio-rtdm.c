@@ -3,9 +3,9 @@
  * @author Nitin Kulkarni
  * @brief Initial version of real-time audio driver for rpi
  * @version 0.1
- * @date 2019-05-31
  *
- * @copyright Copyright Mind Music Labs (c) 2019
+ * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
+ * Stockholm
  *
  */
 #include <linux/module.h>
