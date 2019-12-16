@@ -409,9 +409,8 @@ int bcm2835_i2s_init(int audio_buffer_size, int audio_channels)
 	for (i = 0; i < (BCM2835_DMA_THR_TX + audio_channels); i++)
 		rpi_reg_write(dev->base_addr, BCM2835_I2S_FIFO_A_REG, 0);
 
-	msleep(10);
 	bcm2835_i2s_submit_dma(dev);
-	msleep(50);
+	msleep(10);
 	bcm2835_i2s_start_stop(dev, BCM2835_I2S_START_CMD);
 
 	return 0;

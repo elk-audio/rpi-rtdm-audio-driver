@@ -161,8 +161,6 @@ struct bcm2835_i2s_dev {
 	uint64_t			kinterrupts;
 };
 
-#define MAX_DMA_LEN		SZ_64K
-
 extern int bcm2835_i2s_init(int audio_buffer_size,
 						 int audio_channels);
 extern int bcm2835_i2s_exit(void);
