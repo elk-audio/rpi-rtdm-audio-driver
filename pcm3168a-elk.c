@@ -1,7 +1,9 @@
 /**
  * @file pcm3168a-elk.c
  * @author Nitin Kulkarni
- * @brief The PCM168a codec driver for ELK  PI. A lot of stuff is hardcoded for *	now, idea is to make it runtime configurable ideally. This module is  	*	based on the mainline pcm3168a driver by Damien Horsley.
+ * @brief The PCM168a codec driver for ELK  PI. A lot of stuff is hardcoded for
+ *	now, idea is to make it runtime configurable ideally. This module is
+ *	based on the mainline pcm3168a driver by Damien Horsley.
  * @version 0.1
  * 
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
