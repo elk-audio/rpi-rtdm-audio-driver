@@ -1,12 +1,11 @@
 /**
  * @file pcm3168a-elk.h
  * @author Nitin Kulkarni
- * @brief 
+ * @brief
  * @version 0.1
- * 
+ *
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
  * Stockholm
- * 
  */
 #ifndef RPI_RTDM_CODEC_UTILS_H
 #define RPI_RTDM_CODEC_UTILS_H
@@ -61,7 +60,7 @@
 #define DAC_MASTER_MODE_192xFS			0x50
 #define DAC_MASTER_MODE_128xFS			0x60
 // bits 3:0
-#define DAC_I2S_24_BIT_MODE_MASK		0x00 
+#define DAC_I2S_24_BIT_MODE_MASK		0x00
 #define DAC_LJ_24_BIT_MODE_MASK			0x01
 #define DAC_RJ_24_BIT_MODE_MASK			0x02
 #define DAC_RJ_16_BIT_MODE_MASK			0x03

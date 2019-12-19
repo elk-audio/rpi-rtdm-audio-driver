@@ -1,12 +1,11 @@
 /**
  * @file bcm2835-i2s-elk.h
  * @author Nitin Kulkarni
- * @brief 
  * @version 0.1
- * 
+ *
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
  * Stockholm
- * 
+ *
  */
 #ifndef RPI_BCM2835_I2S_H
 #define RPI_BCM2835_I2S_H

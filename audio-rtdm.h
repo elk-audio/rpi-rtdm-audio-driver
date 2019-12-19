@@ -1,12 +1,10 @@
 /**
  * @file audio-rtdm.h
  * @author Nitin Kulkarni
- * @brief 
  * @version 0.1
- * 
+ *
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
  * Stockholm
- * 
  */
 #ifndef RPI_RTDM_AUDIO_H
 #define RPI_RTDM_AUDIO_H

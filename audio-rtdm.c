@@ -48,7 +48,8 @@ struct audio_dev_context {
 	uint64_t user_proc_calls;
 };
 
-static int audio_driver_open(struct rtdm_fd *fd, int oflags) {
+static int audio_driver_open(struct rtdm_fd *fd, int oflags)
+{
 	struct audio_dev_context *dev_context;
 	printk(KERN_INFO "audio_rtdm: audio_open.\n");
 	dev_context = (struct audio_dev_context *)rtdm_fd_to_private(fd);
@@ -85,18 +86,19 @@ static int audio_driver_mmap_nrt(struct rtdm_fd *fd, struct vm_area_struct *vma)
 }
 
 static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
-								void __user *arg) {
+								void __user *arg)
+{
 	int result;
 	struct audio_dev_context *dev_context = (struct audio_dev_context *)
 					rtdm_fd_to_private(fd);
 	struct audio_rtdm_dev *dev = dev_context->i2s_dev;
 
-	switch(request) {
+	switch (request) {
 
 	case AUDIO_IRQ_WAIT:
 	{
-		if ((result = rtdm_event_wait(&dev->irq_event)
-		) < 0) {
+		result = rtdm_event_wait(&dev->irq_event);
+		if (result < 0) {
 			printk(KERN_ERR "rtdm_event_wait failed\n");
 			return result;
 		}
@@ -138,7 +140,7 @@ static struct rtdm_driver audio_driver = {
 						RTAUDIO_PROFILE_VER),
 	.device_flags		= RTDM_NAMED_DEVICE | RTDM_EXCLUSIVE,
 	.device_count		= 1,
-	.context_size		= sizeof( struct audio_dev_context),
+	.context_size		= sizeof(struct audio_dev_context),
 	.ops = {
 		.open		= audio_driver_open,
 		.close		= audio_driver_close,
@@ -153,7 +155,8 @@ static struct rtdm_device rtdm_audio_device = {
 };
 
 
-int audio_rtdm_init(void) {
+int audio_rtdm_init(void)
+{
 	int ret;
 
 	if (!realtime_core_enabled()) {
@@ -181,7 +184,8 @@ int audio_rtdm_init(void) {
 	return 0;
 }
 
-void audio_rtdm_exit(void) {
+void audio_rtdm_exit(void)
+{
 	printk(KERN_INFO "audio_rtdm: driver exiting...\n");
 	pcm3168a_codec_exit();
 	bcm2835_i2s_exit();

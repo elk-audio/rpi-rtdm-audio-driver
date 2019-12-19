@@ -5,10 +5,9 @@
  *	now, idea is to make it runtime configurable ideally. This module is
  *	based on the mainline pcm3168a driver by Damien Horsley.
  * @version 0.1
- * 
+ *
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
  * Stockholm
- * 
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -22,8 +21,7 @@
 #define PCM3168A_CPLD_RST_PIN 	4
 #define PCM3168A_I2C_BUS_NUM	1
 
-static uint8_t clkgen_reg_val_lookup[CLKGEN_NUM_OF_REGS][2] =
-	{
+static uint8_t clkgen_reg_val_lookup[CLKGEN_NUM_OF_REGS][2] = {
 		{0x07, 0x00},
 		{0x09, 0xFF},
 		{0x0A, 0xFF},
@@ -81,44 +79,44 @@ static struct i2c_board_info i2c_pcm3168a_board_info[] =  {
 	}
 };
 
-static int pcm3168a_config_clk_gen(struct i2c_client* i2c_client_dev) {
+static int pcm3168a_config_clk_gen(struct i2c_client *i2c_client_dev)
+{
 	char cmd[2];
 	int i, ret = 0;
 
 	for (i = CLKGEN_CLK0_CNTRL_REG; i <= CLKGEN_CLK7_CNTRL_REG; i++) {
 		cmd[0] = i;
 		cmd[1] = CLKGEN_CLK_PWR_DWN_MASK;
-		if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd,2))
-		< 0) {
+		ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+		if (ret < 0)
 			return ret;
-		}
 	}
 	msleep(50);
 	for (i = 0; i < CLKGEN_NUM_OF_REGS; i++) {
-		if ((ret = i2c_master_send(i2c_client_dev,
-				&clkgen_reg_val_lookup[i][0], 2)) < 0) {
+		ret = i2c_master_send(i2c_client_dev,
+				&clkgen_reg_val_lookup[i][0], 2);
+		if (ret < 0)
 			return ret;
-		}
 		msleep(20);
 	}
 
 	cmd[0] = CLKGEN_PLL_RESET_REG;
 	cmd[1] = CLKGEN_PLL_RESET_MASK;
-
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
 	msleep(50);
 	cmd[0] = CLKGEN_OUTPUT_EN_CNTRL_REG;
 	cmd[1] = CLKGEN_EN_OUTPUT_MASK;
-
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
+
 	return 0;
 }
 
-static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
+static int pcm3168a_config_codec(struct i2c_client *i2c_client_dev)
+{
 	char cmd[2];
 	int ret;
 
@@ -127,38 +125,39 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			DAC_CHAN_2_3_DISABLED_MODE_MASK |
 			DAC_CHAN_4_5_DISABLED_MODE_MASK |
 			DAC_CHAN_6_7_DISABLED_MODE_MASK;
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
 
 	cmd[0] = PCM_ADC_CNTRL_TWO_REG;
 	cmd[1] = 0x00 | ADC_CHAN_0_1_POWER_SAVE_ENABLE_MASK |
 			ADC_CHAN_2_3_POWER_SAVE_ENABLE_MASK |
 			ADC_CHAN_4_5_POWER_SAVE_ENABLE_MASK;
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
 
 	cmd[0] = PCM_DAC_CNTRL_ONE_REG;
 	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK | DAC_LJ_24_BIT_TDM_MODE_MASK;
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
 
 	cmd[0] = PCM_DAC_CNTRL_THREE_REG;
 	cmd[1] = 0x00 | DAC_MASTER_VOLUME_CONTROL_MODE_MASK |
 			DAC_ATTEN_SPEED_SLOW_MASK |
 			DAC_DEMPH_DISABLE_MASK;
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
 
 	cmd[0] = PCM_ADC_CONTROL_THREE_REG;
 	cmd[1] = 0x00 | ADC_MASTER_VOLUME_CONTROL_MODE_MASK |
 			ADC_ATTEN_SPEED_SLOW_MASK;
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
 
 	/**
 	* ADC settings
@@ -168,9 +167,9 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 	cmd[0] = PCM_ADC_CNTRL_ONE_REG;
 	cmd[1] = 0x00 | ADC_MASTER_MODE_512xFS |
 			ADC_LJ_24_BIT_TDM_MODE_MASK;
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
 
 	// Power up both DAC and ADC
 	cmd[0] = PCM_ADC_CNTRL_TWO_REG;
@@ -178,33 +177,36 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			ADC_CHAN_2_3_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_4_5_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_4_5_NO_HPF_MASK;
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
 
 	cmd[0] = PCM_DAC_CNTRL_TWO_REG;
 	cmd[1] = 0x00 | DAC_CHAN_0_1_NORMAL_MODE_MASK |
 			DAC_CHAN_2_3_NORMAL_MODE_MASK |
 			DAC_CHAN_4_5_NORMAL_MODE_MASK |
 			DAC_CHAN_6_7_NORMAL_MODE_MASK;
-	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
+	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
+	if (ret < 0)
 		return ret;
-	}
 
 	return 0;
 }
 
-int pcm3168a_codec_init(void) {
+int pcm3168a_codec_init(void)
+{
 	int ret;
 	struct i2c_adapter *adapter = i2c_get_adapter(PCM3168A_I2C_BUS_NUM);
 	struct i2c_client *client = i2c_new_device
 					(adapter, i2c_clkgen_board_info);
 
-	if ((ret = gpio_request(PCM3168A_CODEC_RST_PIN, "CODEC_RST")) < 0) {
+	ret = gpio_request(PCM3168A_CODEC_RST_PIN, "CODEC_RST");
+	if (ret < 0) {
 		printk(KERN_ERR "pcm3168a-elk: Failed to get CODEC_RST_GPIO\n");
 		return ret;
 	}
-	if ((ret = gpio_request(PCM3168A_CPLD_RST_PIN, "SIKA_RST")) < 0) {
+	ret = gpio_request(PCM3168A_CPLD_RST_PIN, "SIKA_RST");
+	if (ret < 0) {
 		printk(KERN_ERR "pcm3168a-elk: Failed to get SIKA_RST\n");
 		return ret;
 	}
@@ -216,7 +218,7 @@ int pcm3168a_codec_init(void) {
 	gpio_direction_output(PCM3168A_CODEC_RST_PIN, 1);
 	msleep(5);
 	i2c_unregister_device(client);
-	client = i2c_new_device(adapter,i2c_pcm3168a_board_info);
+	client = i2c_new_device(adapter, i2c_pcm3168a_board_info);
 	if (pcm3168a_config_codec(client)) {
 		printk(KERN_ERR "pcm31681-elk: config_codec failed\n");
 		return -1;
@@ -230,19 +232,22 @@ int pcm3168a_codec_init(void) {
 }
 EXPORT_SYMBOL_GPL(pcm3168a_codec_init);
 
-void pcm3168a_codec_exit(void) {
+void pcm3168a_codec_exit(void)
+{
 	printk(KERN_INFO "pcm31681-elk: unregister i2c-client\n");
 	gpio_free(PCM3168A_CODEC_RST_PIN);
 	gpio_free(PCM3168A_CPLD_RST_PIN);
 }
 EXPORT_SYMBOL_GPL(pcm3168a_codec_exit);
 
-int pcm3168a_init(void) {
+int pcm3168a_init(void)
+{
 	printk(KERN_INFO "pcm31681-elk: module init\n");
 	return 0;
 }
 
-void pcm3168a_exit(void) {
+void pcm3168a_exit(void)
+{
 	printk(KERN_INFO "pcm31681-elk: module exit\n");
 }
 
