@@ -88,15 +88,14 @@ static int pcm3168a_config_clk_gen(struct i2c_client* i2c_client_dev) {
 		cmd[1] = CLKGEN_CLK_PWR_DWN_MASK;
 		if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd,2))
 		< 0) {
-			printk("audio_rtdm: i2c_master_send failed to send cmd\n");
 			return ret;
 		}
 	}
 	msleep(50);
 	for (i = 0; i < CLKGEN_NUM_OF_REGS; i++) {
-		if (i2c_master_send(i2c_client_dev, &clkgen_reg_val_lookup[i][0]
-		, 2) < 0) {
-			printk("audio_rtdm: Faild to send look up\n");
+		if ((ret = i2c_master_send(i2c_client_dev,
+				&clkgen_reg_val_lookup[i][0], 2)) < 0) {
+			return ret;
 		}
 		msleep(20);
 	}
@@ -105,7 +104,6 @@ static int pcm3168a_config_clk_gen(struct i2c_client* i2c_client_dev) {
 	cmd[1] = CLKGEN_PLL_RESET_MASK;
 
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("audio_rtdm: i2c_master_send failed to send cmd\n");
 		return ret;
 	}
 	msleep(50);
@@ -113,7 +111,6 @@ static int pcm3168a_config_clk_gen(struct i2c_client* i2c_client_dev) {
 	cmd[1] = CLKGEN_EN_OUTPUT_MASK;
 
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("audio_rtdm: i2c_master_send failed to send cmd\n");
 		return ret;
 	}
 	return 0;
@@ -129,8 +126,6 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			DAC_CHAN_4_5_DISABLED_MODE_MASK |
 			DAC_CHAN_6_7_DISABLED_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("audio_rtdm: i2c_master_send failed to send cmd  to \
-		PCM_DAC_CNTRL_TWO_REG\n");
 		return ret;
 	}
 
@@ -139,16 +134,12 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			ADC_CHAN_2_3_POWER_SAVE_ENABLE_MASK |
 			ADC_CHAN_4_5_POWER_SAVE_ENABLE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("audio_rtdm: i2c_master_send failed to send cmd to \
-		PCM_ADC_CNTRL_TWO_REG\n");
 		return ret;
 	}
 
 	cmd[0] = PCM_DAC_CNTRL_ONE_REG;
 	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK | DAC_LJ_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("audio_rtdm: i2c_master_send failed to send cmd to \
-		PCM_DAC_CNTRL_ONE_REG\n");
 		return ret;
 	}
 
@@ -157,8 +148,6 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			DAC_ATTEN_SPEED_SLOW_MASK |
 			DAC_DEMPH_DISABLE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("config_codec: i2c_master_send failed to send cmd to \
-		DAC_CONTROL_3_REG_DATA\n");
 		return ret;
 	}
 
@@ -166,8 +155,6 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 	cmd[1] = 0x00 | ADC_MASTER_VOLUME_CONTROL_MODE_MASK |
 			ADC_ATTEN_SPEED_SLOW_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk("audio_rtdm: i2c_master_send failed to send cmd to \
-		PCM_ADC_CONTROL_THREE_REG\n");
 		return ret;
 	}
 
@@ -180,8 +167,6 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 	cmd[1] = 0x00 | ADC_MASTER_MODE_512xFS |
 			ADC_LJ_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk(KERN_ERR "audio_rtdm: i2c_master_send failed for \
-		PCM_ADC_CNTRL_ONE_REG\n");
 		return ret;
 	}
 
@@ -192,8 +177,6 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			ADC_CHAN_4_5_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_4_5_NO_HPF_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk(KERN_ERR "audio_rtdm: i2c_master_send failed to send cmd \
-		to power up adcs\n");
 		return ret;
 	}
 
@@ -203,8 +186,6 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 			DAC_CHAN_4_5_NORMAL_MODE_MASK |
 			DAC_CHAN_6_7_NORMAL_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
-		printk(KERN_ERR "audio_rtdm: i2c_master_send failed to send cmd to \
-		PCM_DAC_CNTRL_REG_TWO to power up dacs\n");
 		return ret;
 	}
 
@@ -228,7 +209,7 @@ int pcm3168a_codec_init(void) {
 	gpio_direction_output(PCM3168A_CPLD_RST_PIN, 1);
 	gpio_direction_output(PCM3168A_CODEC_RST_PIN, 0);
 	if (pcm3168a_config_clk_gen(client))
-		printk(KERN_ERR "pcm3168a-elk: rpi_config_clk_gen failed\n");
+		printk(KERN_ERR "pcm3168a-elk: clk generator config failed\n");
 	msleep(200); // let the clk settle
 	gpio_direction_output(PCM3168A_CODEC_RST_PIN, 1);
 	msleep(5);

@@ -116,7 +116,7 @@ void bcm2835_i2s_start_stop(struct audio_rtdm_dev *dev, int cmd)
 					 discarded++;
 			}
 		}
-		printk(KERN_INFO "bcm2835-i2s-elk: %d sampls discarded\n",
+		printk(KERN_INFO "bcm2835-i2s: %d samples discarded\n",
 								discarded);
 	}
 	else {
@@ -240,7 +240,7 @@ static int bcm2835_i2s_dma_setup(struct audio_rtdm_dev *rpi_dev)
 		return -ENODEV;
 	}
 
-	printk(KERN_INFO "bcm2835_i2s_dma_setup: Successful.\n");
+	printk(KERN_INFO "bcm2835-i2s: dma setup successful.\n");
 	return 0;
 }
 
@@ -248,23 +248,23 @@ static int bcm2835_init_cv_gates(void) {
 	int  i, ret;
 	for ( i = 0; i < NUM_OF_CVGATE_OUTS; i++) {
 		if ((ret = gpio_request(cv_gate_out[i], "cv_out_gate")) < 0) {
-			printk(KERN_ERR "audio_rtdm: failed to get cv out\n");
+			printk(KERN_ERR "bcm2835-i2s: failed to get cv out\n");
 			return ret;
 		}
 
 		if ((ret = gpio_direction_output(cv_gate_out[i], 0)) < 0) {
-			printk(KERN_ERR "audio_rtdm: failed to set gpio dir\n");
+			printk(KERN_ERR "bcm2835-i2s: failed to set gpio dir\n");
 			return ret;
 		}
 	}
 	for ( i = 0; i < NUM_OF_CVGATE_INS; i++) {
 		if ((ret = gpio_request(cv_gate_in[i], "cv_in_gate")) < 0) {
-			printk(KERN_ERR "audio_rtdm: failed to get cv out\n");
+			printk(KERN_ERR "bcm2835-i2s: failed to get cv out\n");
 			return ret;
 		}
 
 		if ((ret = gpio_direction_input(cv_gate_in[i])) < 0) {
-			printk(KERN_ERR "audio_rtdm: failed to set gpio dir\n");
+			printk(KERN_ERR "bcm2835-i2s: failed to set gpio dir\n");
 			return ret;
 		}
 	}
@@ -348,7 +348,7 @@ static void bcm2835_i2s_configure(struct audio_rtdm_dev * dev)
 			| BCM2835_I2S_RX(BCM2835_DMA_THR_RX), 0xffffffff);
 }
 
-void bcm2835_i2s_enable(struct audio_rtdm_dev *dev)
+static void bcm2835_i2s_enable(struct audio_rtdm_dev *dev)
 {
 	/* Disable RAM STBY */
 	rpi_reg_update_bits(dev->base_addr, BCM2835_I2S_CS_A_REG,
@@ -385,7 +385,7 @@ int bcm2835_i2s_init(int audio_buffer_size, int audio_channels)
 				NUM_OF_PAGES * PAGE_SIZE, &dummy_phys_addr,
 				GFP_KERNEL);
 	if (!audio_buffer->rx_buf ) {
-		printk(KERN_ERR "couldn't allocate coherent_mem\n");
+		printk(KERN_ERR "bcm2835-i2s: couldn't allocate dma mem\n");
 		return -ENOMEM;
 	}
 	audio_buffer->rx_phys_addr = dummy_phys_addr;
@@ -403,7 +403,7 @@ int bcm2835_i2s_init(int audio_buffer_size, int audio_channels)
 
 	ret = bcm2835_i2s_dma_prepare(dev);
 	if (ret) {
-		printk(KERN_ERR "bcm2835_i2s_dma_prepare failed!\n");
+		printk(KERN_ERR "bcm2835-i2s: dma_prepare failed\n");
 		return -EINVAL;
 	}
 
@@ -433,11 +433,13 @@ int bcm2835_i2s_exit(void)
 	int ret = 0;
 	struct audio_rtdm_dev *dev = audio_static_dev;
 	if ( (ret = dmaengine_terminate_async(dev->dma_tx)) < 0) {
-		printk("dmaengine_terminate_async failed\n");
+		printk(KERN_ERR "bcm2835-i2s: dmaengine_terminate_async \
+		 failed\n");
 		return ret;
 	}
 	if ( (ret = dmaengine_terminate_async(dev->dma_rx)) < 0) {
-		printk("dmaengine_terminate_async failed\n");
+		printk(KERN_ERR "bcm2835-i2s: dmaengine_terminate_async \
+		 failed\n");
 		return ret;
 	}
 	dma_free_coherent(dev->dma_rx->device->dev,
