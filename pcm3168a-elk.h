@@ -1,6 +1,6 @@
 /**
- * @file rpi-rtdm-i2c.h
- * @author Nitin Kulkarni (nitin.kulkarni@mindmusiclabs.com)
+ * @file pcm3168a-elk.h
+ * @author Nitin Kulkarni
  * @brief 
  * @version 0.1
  * 

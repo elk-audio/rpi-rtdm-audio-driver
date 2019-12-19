@@ -1,5 +1,5 @@
 /**
- * @file bcm2835-rtdm-audio-driver.c
+ * @file audio-rtdm.c
  * @author Nitin Kulkarni
  * @brief Initial version of real-time audio driver for rpi
  * @version 0.1

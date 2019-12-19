@@ -1,6 +1,6 @@
 /**
- * @file rpi-rtdm-i2s.c
- * @author Nitin Kulkarni (nitin.kulkarni@mindmusiclabs.com)
+ * @file bcm2835-i2s-elk.c
+ * @author Nitin Kulkarni
  * @brief I2S module of theRTDM audio driver.
  * A lot of stuff is based on the mainline I2S module by Florian Meier
  * @version 0.1
@@ -11,16 +11,12 @@
  */
 #include <linux/platform_device.h>
 #include <linux/device.h>
-#include <linux/clk.h>
 #include <linux/slab.h>
 #include <linux/of_address.h>
 #include <linux/delay.h>
-#include <linux/spinlock.h>
 #include <rtdm/driver.h>
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
-#include <linux/slab.h>
-#include <linux/interrupt.h>
 #include <asm/io.h>
 #include <linux/gpio.h>
 

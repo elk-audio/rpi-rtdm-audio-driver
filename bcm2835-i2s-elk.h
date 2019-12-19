@@ -1,6 +1,6 @@
 /**
- * @file rpi-rtdm-i2s.h
- * @author Nitin Kulkarni (nitin.kulkarni@mindmusiclabs.com)
+ * @file bcm2835-i2s-elk.h
+ * @author Nitin Kulkarni
  * @brief 
  * @version 0.1
  * 
@@ -16,7 +16,7 @@
 #include <linux/err.h>
 #include <linux/sizes.h>
 
-#include "audio_rtdm.h"
+#include "audio-rtdm.h"
 
 #define BCM2835_I2S_IRQ_NUM 85
 

@@ -1,6 +1,6 @@
 /**
- * @file rpi-rtdm-i2c.c
- * @author Nitin Kulkarni (nitin.kulkarni@mindmusiclabs.com)
+ * @file pcm3168a-elk.c
+ * @author Nitin Kulkarni
  * @brief The PCM168a codec driver for ELK  PI. A lot of stuff is hardcoded for *	now, idea is to make it runtime configurable ideally. This module is  	*	based on the mainline pcm3168a driver by Damien Horsley.
  * @version 0.1
  * 
