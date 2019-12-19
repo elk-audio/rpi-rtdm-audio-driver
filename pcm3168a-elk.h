@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /**
  * @file pcm3168a-elk.h
  * @author Nitin Kulkarni

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /**
  * @file bcm2835-i2s-elk.h
  * @author Nitin Kulkarni
