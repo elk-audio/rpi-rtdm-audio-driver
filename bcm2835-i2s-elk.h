@@ -12,17 +12,11 @@
 #define RPI_BCM2835_I2S_H
 
 #include <linux/bitops.h>
-#include <linux/clk.h>
-#include <linux/ipipe.h>
-#include <linux/ipipe_domain.h>
 #include <asm/barrier.h>
 #include <linux/err.h>
 #include <linux/sizes.h>
-#include <linux/scatterlist.h>
-#include <linux/io.h>
-#include <linux/dmaengine.h>
-#include <rtdm/driver.h>
-#include <rtdm/rtdm.h>
+
+#include "audio_rtdm.h"
 
 #define BCM2835_I2S_IRQ_NUM 85
 
@@ -132,38 +126,9 @@ static inline void rpi_reg_read(void *base_addr, uint32_t reg_addr,
 	*value = *reg;
 }
 
-struct bcm2835_i2s_buffers {
-	uint32_t 	 	*cv_gate_out;
-	uint32_t 	 	*cv_gate_in;
-	void			*tx_buf;
-	void			*rx_buf;
-	size_t			buffer_len;
-	size_t			period_len;
-	dma_addr_t 			tx_phys_addr;
-	dma_addr_t 			rx_phys_addr;
-};
-
-/* General device struct */
-struct bcm2835_i2s_dev {
-	struct device			*dev;
-	void __iomem			*base_addr;
-	struct dma_chan			*dma_tx;
-	struct dma_chan			*dma_rx;
-	struct dma_async_tx_descriptor 	*tx_desc;
-	struct dma_async_tx_descriptor	*rx_desc;
-	dma_addr_t			fifo_dma_addr;
-	unsigned			addr_width;
-	unsigned			dma_burst_size;
-	struct bcm2835_i2s_buffers		*buffer;
-	rtdm_event_t 			irq_event;
-	unsigned			wait_flag;
-	unsigned			buffer_idx;
-	uint64_t			kinterrupts;
-};
-
 extern int bcm2835_i2s_init(int audio_buffer_size,
 						 int audio_channels);
 extern int bcm2835_i2s_exit(void);
-extern struct bcm2835_i2s_dev *bcm2835_get_i2s_dev(void);
+extern struct audio_rtdm_dev *bcm2835_get_i2s_dev(void);
 
 #endif

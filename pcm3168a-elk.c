@@ -8,20 +8,17 @@
  * Stockholm
  * 
  */
+#include <linux/module.h>
+#include <linux/kernel.h>
 #include <linux/i2c.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
-#include <rtdm/driver.h>
-#include <rtdm/rtdm.h>
-#include <linux/interrupt.h>
 
 #include "pcm3168a-elk.h"
 
 #define PCM3168A_CODEC_RST_PIN  16
 #define PCM3168A_CPLD_RST_PIN 	4
 #define PCM3168A_I2C_BUS_NUM	1
-
-static struct i2c_client* i2c_device_client;
 
 static uint8_t clkgen_reg_val_lookup[CLKGEN_NUM_OF_REGS][2] =
 	{
@@ -136,7 +133,7 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 		PCM_DAC_CNTRL_TWO_REG\n");
 		return ret;
 	}
-	msleep(10);
+
 	cmd[0] = PCM_ADC_CNTRL_TWO_REG;
 	cmd[1] = 0x00 | ADC_CHAN_0_1_POWER_SAVE_ENABLE_MASK |
 			ADC_CHAN_2_3_POWER_SAVE_ENABLE_MASK |
@@ -146,7 +143,7 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 		PCM_ADC_CNTRL_TWO_REG\n");
 		return ret;
 	}
-	msleep(10);
+
 	cmd[0] = PCM_DAC_CNTRL_ONE_REG;
 	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK | DAC_LJ_24_BIT_TDM_MODE_MASK;
 	if ((ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2)) < 0) {
@@ -154,7 +151,7 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 		PCM_DAC_CNTRL_ONE_REG\n");
 		return ret;
 	}
-	msleep(10);
+
 	cmd[0] = PCM_DAC_CNTRL_THREE_REG;
 	cmd[1] = 0x00 | DAC_MASTER_VOLUME_CONTROL_MODE_MASK |
 			DAC_ATTEN_SPEED_SLOW_MASK |
@@ -164,7 +161,7 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 		DAC_CONTROL_3_REG_DATA\n");
 		return ret;
 	}
-	msleep(10);
+
 	cmd[0] = PCM_ADC_CONTROL_THREE_REG;
 	cmd[1] = 0x00 | ADC_MASTER_VOLUME_CONTROL_MODE_MASK |
 			ADC_ATTEN_SPEED_SLOW_MASK;
@@ -173,7 +170,7 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 		PCM_ADC_CONTROL_THREE_REG\n");
 		return ret;
 	}
-	msleep(10);
+
 	/**
 	* ADC settings
 	* -> Master where master clock is 512xfs
@@ -187,7 +184,7 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 		PCM_ADC_CNTRL_ONE_REG\n");
 		return ret;
 	}
-	msleep(10);
+
 	// Power up both DAC and ADC
 	cmd[0] = PCM_ADC_CNTRL_TWO_REG;
 	cmd[1] = 0x00 | ADC_CHAN_0_1_POWER_SAVE_DISABLE_MASK |
@@ -199,7 +196,7 @@ static int pcm3168a_config_codec(struct i2c_client* i2c_client_dev) {
 		to power up adcs\n");
 		return ret;
 	}
-	msleep(10);
+
 	cmd[0] = PCM_DAC_CNTRL_TWO_REG;
 	cmd[1] = 0x00 | DAC_CHAN_0_1_NORMAL_MODE_MASK |
 			DAC_CHAN_2_3_NORMAL_MODE_MASK |
@@ -220,9 +217,6 @@ int pcm3168a_codec_init(void) {
 	struct i2c_client *client = i2c_new_device
 					(adapter, i2c_clkgen_board_info);
 
-	if (pcm3168a_config_clk_gen(client))
-		printk(KERN_ERR "pcm3168a-elk: rpi_config_clk_gen failed\n");
-
 	if ((ret = gpio_request(PCM3168A_CODEC_RST_PIN, "CODEC_RST")) < 0) {
 		printk(KERN_ERR "pcm3168a-elk: Failed to get CODEC_RST_GPIO\n");
 		return ret;
@@ -233,7 +227,9 @@ int pcm3168a_codec_init(void) {
 	}
 	gpio_direction_output(PCM3168A_CPLD_RST_PIN, 1);
 	gpio_direction_output(PCM3168A_CODEC_RST_PIN, 0);
-	msleep(5);
+	if (pcm3168a_config_clk_gen(client))
+		printk(KERN_ERR "pcm3168a-elk: rpi_config_clk_gen failed\n");
+	msleep(200); // let the clk settle
 	gpio_direction_output(PCM3168A_CODEC_RST_PIN, 1);
 	msleep(5);
 	i2c_unregister_device(client);
@@ -244,6 +240,8 @@ int pcm3168a_codec_init(void) {
 	}
 	msleep(5);
 	gpio_direction_output(PCM3168A_CPLD_RST_PIN, 0);
+	i2c_unregister_device(client);
+	i2c_put_adapter(adapter);
 	printk(KERN_INFO "pcm31681-elk: codec configured\n");
 	return 0;
 }
@@ -251,7 +249,6 @@ EXPORT_SYMBOL_GPL(pcm3168a_codec_init);
 
 void pcm3168a_codec_exit(void) {
 	printk(KERN_INFO "pcm31681-elk: unregister i2c-client\n");
-	i2c_unregister_device(i2c_device_client);
 	gpio_free(PCM3168A_CODEC_RST_PIN);
 	gpio_free(PCM3168A_CPLD_RST_PIN);
 }

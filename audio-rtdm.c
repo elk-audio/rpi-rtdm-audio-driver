@@ -44,10 +44,8 @@ static uint audio_sampling_rate = DEFAULT_AUDIO_SAMPLING_RATE;
 module_param(audio_sampling_rate, uint, 0444);
 
 struct audio_dev_context {
-	ipipe_spinlock_t lock;
-	struct bcm2835_i2s_dev *i2s_dev;
+	struct audio_rtdm_dev *i2s_dev;
 	uint64_t user_proc_calls;
-	rtdm_task_t *audio_task;
 };
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags) {
@@ -81,7 +79,7 @@ static int audio_driver_mmap_nrt(struct rtdm_fd *fd, struct vm_area_struct *vma)
 {
 	struct audio_dev_context *dev_context = (struct audio_dev_context *)
 							rtdm_fd_to_private(fd);
-	struct bcm2835_i2s_buffers *i2s_buffer = dev_context->i2s_dev->buffer;
+	struct audio_rtdm_buffers *i2s_buffer = dev_context->i2s_dev->buffer;
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 	return rtdm_mmap_kmem(vma, i2s_buffer->rx_buf);
 }
@@ -91,7 +89,7 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 	int result;
 	struct audio_dev_context *dev_context = (struct audio_dev_context *)
 					rtdm_fd_to_private(fd);
-	struct bcm2835_i2s_dev *dev = dev_context->i2s_dev;
+	struct audio_rtdm_dev *dev = dev_context->i2s_dev;
 
 	switch(request) {
 
