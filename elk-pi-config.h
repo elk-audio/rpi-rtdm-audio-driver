@@ -7,7 +7,7 @@
 #ifndef ELK_PI_CONFIG_H
 #define ELK_PI_CONFIG_H
 
-/* BCM2835_i2S_CVGATES_SUPPORT should be defined (through Make file or here or a Kconfig if this module is part of kernel tree) to enable cv gates support */
+/* BCM2835_I2S_CVGATES_SUPPORT should be defined (through Make file or here or a Kconfig if this module is part of kernel tree) to enable cv gates support */
 
 /**
  * Cv gate gpio pin definitions
