@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
-/**
- * @file pcm3168a-elk.c
- * @author Nitin Kulkarni
+/*
  * @brief The PCM168a codec driver for ELK  PI. A lot of stuff is hardcoded for
  *	now, idea is to make it runtime configurable ideally. This module is
  *	based on the mainline pcm3168a driver by Damien Horsley.
- * @version 0.1
- *
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
  * Stockholm
  */
@@ -22,6 +18,7 @@
 #define PCM3168A_CPLD_RST_PIN 	4
 #define PCM3168A_I2C_BUS_NUM	1
 
+/* generated with si5351 tool to generate 24.576 Mhz clk */
 static uint8_t clkgen_reg_val_lookup[CLKGEN_NUM_OF_REGS][2] = {
 		{0x07, 0x00},
 		{0x09, 0xFF},
@@ -208,7 +205,7 @@ int pcm3168a_codec_init(void)
 	}
 	ret = gpio_request(PCM3168A_CPLD_RST_PIN, "SIKA_RST");
 	if (ret < 0) {
-		printk(KERN_ERR "pcm3168a-elk: Failed to get SIKA_RST\n");
+		printk(KERN_ERR "pcm3168a-elk: Failed to get CPLD_RST\n");
 		return ret;
 	}
 	gpio_direction_output(PCM3168A_CPLD_RST_PIN, 1);
@@ -256,5 +253,5 @@ module_init(pcm3168a_init)
 module_exit(pcm3168a_exit)
 
 MODULE_DESCRIPTION("PCM3168A I2C codec driver for ELK Pi");
-MODULE_AUTHOR("Nitin Kulkarni");
-MODULE_LICENSE("GPL v2");
+MODULE_AUTHOR("Nitin Kulkarni (nitin@elk.audio)");
+MODULE_LICENSE("GPL");

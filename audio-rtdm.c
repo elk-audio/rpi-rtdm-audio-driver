@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
-/**
- * @file audio-rtdm.c
- * @author Nitin Kulkarni
+/*
  * @brief Initial version of real-time audio driver for rpi
- * @version 0.1
- *
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
  * Stockholm
- *
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -22,7 +17,7 @@
 #include "bcm2835-i2s-elk.h"
 #include "audio-rtdm.h"
 
-MODULE_AUTHOR("Nitin Kulkarni");
+MODULE_AUTHOR("Nitin Kulkarni (nitin@elk.audio)");
 MODULE_DESCRIPTION("RTDM audio driver for RPi");
 MODULE_LICENSE("GPL");
 
@@ -123,7 +118,7 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 	case AUDIO_USERPROC_FINISHED:
 	{
 		result = (dev->kinterrupts -
-		dev_context->user_proc_calls);
+				dev_context->user_proc_calls);
 		return result;
 	}
 

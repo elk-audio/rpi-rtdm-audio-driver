@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
-/**
- * @file bcm2835-i2s-elk.c
- * @author Nitin Kulkarni
- * @brief I2S module of theRTDM audio driver.
- * A lot of stuff is based on the mainline I2S module by Florian Meier
- * @version 0.1
- *
+/*
+ * @brief I2S module of the RTDM audio driver.
+ *	  A lot of stuff is based on the mainline I2S module by Florian Meier
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
  * Stockholm
  */
@@ -22,26 +18,14 @@
 
 #include "pcm3168a-elk.h"
 #include "bcm2835-i2s-elk.h"
-
-/**
- * Cv gate gpio pin definitions
- */
-#define 	NUM_OF_CVGATE_OUTS	4
-#define 	NUM_OF_CVGATE_INS	2
-#define	 	CV_GATE_OUT1		17
-#define 	CV_GATE_OUT2		27
-#define 	CV_GATE_OUT3		22
-#define 	CV_GATE_OUT4		23
-#define 	CV_GATE_IN1		24
-#define 	CV_GATE_IN2		25
-
+#include "elk-pi-config.h"
 
 static struct audio_rtdm_dev *audio_static_dev;
 
-static int cv_gate_out[NUM_OF_CVGATE_OUTS] = {CV_GATE_OUT1, CV_GATE_OUT2,
- CV_GATE_OUT3, CV_GATE_OUT4};
-
-static int cv_gate_in[NUM_OF_CVGATE_INS] = {CV_GATE_IN1, CV_GATE_IN2};
+#ifdef CONFIG_CVGATES_SUPPORT
+static int cv_gate_out[NUM_OF_CVGATE_OUTS] = { CVGATE_OUTS_LIST };
+static int cv_gate_in[NUM_OF_CVGATE_INS] = { CVGATE_INS_LIST };
+#endif
 
 void bcm2835_i2s_clear_fifos(struct audio_rtdm_dev *dev,
 				    bool tx, bool rx)
@@ -133,6 +117,8 @@ static void bcm2835_i2s_dma_callback(void *data)
 	dev->buffer_idx = ~(dev->buffer_idx) & 0x1;
 	if (dev->wait_flag) {
 		rtdm_event_signal(&dev->irq_event);
+
+#ifdef CONFIG_CVGATES_SUPPORT
 		for (i = 0; i < NUM_OF_CVGATE_OUTS; i++) {
 			val = (unsigned long) *dev->buffer->cv_gate_out &
 			 BIT(i);
@@ -143,6 +129,7 @@ static void bcm2835_i2s_dma_callback(void *data)
 		val |= gpio_get_value(cv_gate_in[i]) << i;
 		}
 		*dev->buffer->cv_gate_in = val;
+#endif
 	}
 }
 
@@ -173,7 +160,7 @@ bcm2835_i2s_dma_prepare_cyclic(struct audio_rtdm_dev *dev,
 		desc = dmaengine_prep_dma_cyclic(chan,
 		audio_buffers->tx_phys_addr, audio_buffers->buffer_len,
 		audio_buffers->period_len, dir, flags);
-	} else {
+	} else if (dir == DMA_DEV_TO_MEM) {
 		cfg.src_addr = dev->fifo_dma_addr;
 		cfg.src_addr_width = dev->addr_width;
 		cfg.src_maxburst = dev->dma_burst_size;
@@ -187,6 +174,9 @@ bcm2835_i2s_dma_prepare_cyclic(struct audio_rtdm_dev *dev,
 		desc = dmaengine_prep_dma_cyclic(chan,
 		audio_buffers->rx_phys_addr, audio_buffers->buffer_len,
 		audio_buffers->period_len, dir, flags);
+	} else {
+		printk(KERN_ERR "bcm2835-i2s: unsupported dma direction\n");
+		return NULL;
 	}
 	return desc;
 }
@@ -244,6 +234,7 @@ static int bcm2835_i2s_dma_setup(struct audio_rtdm_dev *rpi_dev)
 	return 0;
 }
 
+#ifdef CONFIG_CVGATES_SUPPORT
 static int bcm2835_init_cv_gates(void)
 {
 	int  i, ret;
@@ -283,6 +274,7 @@ static void bcm2835_free_cv_gates(void)
 	for (i = 0; i < NUM_OF_CVGATE_INS; i++)
 		gpio_free(cv_gate_in[i]);
 }
+#endif
 
 static void bcm2835_i2s_configure(struct audio_rtdm_dev *dev)
 {
@@ -387,7 +379,8 @@ int bcm2835_i2s_init(int audio_buffer_size, int audio_channels)
 	struct audio_rtdm_buffers *audio_buffer = dev->buffer;
 
 	audio_buffer->rx_buf = dma_zalloc_coherent(dev->dma_rx->device->dev,
-				NUM_OF_PAGES * PAGE_SIZE, &dummy_phys_addr,
+				RESERVED_BUFFER_SIZE_IN_PAGES * PAGE_SIZE,
+				&dummy_phys_addr,
 				GFP_KERNEL);
 	if (!audio_buffer->rx_buf) {
 		printk(KERN_ERR "bcm2835-i2s: couldn't allocate dma mem\n");
@@ -450,7 +443,8 @@ int bcm2835_i2s_exit(void)
 		return ret;
 	}
 	dma_free_coherent(dev->dma_rx->device->dev,
-				NUM_OF_PAGES * PAGE_SIZE, dev->buffer->rx_buf,
+				RESERVED_BUFFER_SIZE_IN_PAGES * PAGE_SIZE,
+				dev->buffer->rx_buf,
 				dev->buffer->rx_phys_addr);
 	dma_release_channel(dev->dma_tx);
 	dma_release_channel(dev->dma_rx);
@@ -498,7 +492,10 @@ int bcm2835_i2s_probe(struct platform_device *pdev)
 
 	bcm2835_i2s_clear_regs(dev);
 	bcm2835_i2s_configure(dev);
+
+#ifdef CONFIG_CVGATES_SUPPORT
 	bcm2835_init_cv_gates();
+#endif
 
 	if (bcm2835_i2s_dma_setup(dev))
 		return -ENODEV;
@@ -521,7 +518,10 @@ static int bcm2835_i2s_remove(struct platform_device *pdev)
 
 	bcm2835_i2s_start_stop(audio_static_dev, BCM2835_I2S_STOP_CMD);
 	kfree(audio_buffers);
+
+#ifdef CONFIG_CVGATES_SUPPORT
 	bcm2835_free_cv_gates();
+#endif
 	devm_iounmap(&pdev->dev, (void *)audio_static_dev->base_addr);
 	devm_kfree(&pdev->dev, (void *)audio_static_dev);
 	return 0;
@@ -545,5 +545,5 @@ static struct platform_driver bcm2835_i2s_driver = {
 
 module_platform_driver(bcm2835_i2s_driver);
 MODULE_DESCRIPTION("BCM2835 I2S interface for ELK Pi");
-MODULE_AUTHOR("Nitin Kulkarni");
-MODULE_LICENSE("GPL v2");
+MODULE_AUTHOR("Nitin Kulkarni (nitin@elk.audio)");
+MODULE_LICENSE("GPL");

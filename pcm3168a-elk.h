@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
-/**
- * @file pcm3168a-elk.h
- * @author Nitin Kulkarni
- * @brief
- * @version 0.1
- *
+/*
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
  * Stockholm
  */
-#ifndef RPI_RTDM_CODEC_UTILS_H
-#define RPI_RTDM_CODEC_UTILS_H
+#ifndef PCM3168A_ELK_H
+#define PCM3168A_ELK_H
 
 /* Clock generator related definitions */
 

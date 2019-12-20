@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
-/**
- * @file bcm2835-i2s-elk.h
- * @author Nitin Kulkarni
- * @version 0.1
- *
+/*
  * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
  * Stockholm
- *
  */
-#ifndef RPI_BCM2835_I2S_H
-#define RPI_BCM2835_I2S_H
+#ifndef BCM2835_I2S_ELK_H
+#define BCM2835_I2S_ELK_H
 
 #include <linux/bitops.h>
 #include <asm/barrier.h>
@@ -99,7 +94,7 @@
 
 /* Frame length register is 10 bit, maximum length 1024 */
 #define BCM2835_I2S_MAX_FRAME_LENGTH	1024
-#define NUM_OF_PAGES			20
+#define RESERVED_BUFFER_SIZE_IN_PAGES	20
 
 static inline void rpi_reg_write(void *base_addr, uint32_t reg_addr,
 				uint32_t value)
