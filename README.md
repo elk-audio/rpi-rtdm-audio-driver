@@ -1,39 +1,52 @@
 # Audio RTDM driver
 
-Xenomai based real time audio driver for Elk Pi hat
+Xenomai real-time audio driver for TI PCM3168A codec on the [Elk Pi hat](https://elk.audio/dev-kit/).
 
 ## Building
 
-With kernel source and cross compiler setup on host:
+Have the kernel sources and an ARMv7 cross-compilation toolchain on your host machine, then do:
 
-`export KERNEL_PATH=<path to kernel source>`
+(https://github.com/elk-audio/elkpi-sdk) available on the host machine, then:
 
-`export CROSS_COMPILE=<arm compiler prefix>`
+```
+$ export KERNEL_PATH=<path to kernel source tree>
+$ export CROSS_COMPILE=<arm compiler prefix>
+$ make
+```
 
-`make`
+It's possible to just use the official [Elk Audio OS cross-compiling SDK](https://github.com/elk-audio/elkpi-sdk), in which case you don't have to set the `CROSS_COMPILE` environment variable since the SDK will do it automatically.
 
-With Yocto layers setup and using devshell option of Bitbake:
+As an alternative, you can build using the devshell option of Bitbake if you have all the Yocto layers ready on the host machine:
 
-`bitbake -c devshell virtual/kernel`
+```
+$ bitbake -c devshell virtual/kernel
+$ export KERNEL_PATH=<path to kernel source in your bitbake tmp build files>
+$ make
+```
 
-`export KERNEL_PATH=<path to kernel source in your bitbake tmp build files>`
+By default CV gates support is enabled with the definition `BCM2835_I2S_CVGATES_SUPPORT`.
+It is currently set in the `Makefile` script with this line:
 
-`make`
+```
+ccflags-y += -DBCM2835_i2S_CVGATES_SUPPORT
+```
 
-By default CV gates support is enabled by the definition *BCM2835_i2S_CVGATES_SUPPORT*.
-It is passed to Makefile with this line in the Makefile (remove this line to disable CV gates support)
-
-`ccflags-y += -DBCM2835_i2S_CVGATES_SUPPORT`
+Just remove the line if you want to compile without CV gate support.
 
 ## Usage Example
-To load the driver out of tree :
+To load the driver as an out-of-tree module, run as sudo:
 
-`insmod pcm3168a-elk.ko`
+```
+$ insmod pcm3168a-elk.ko
+$ insmod bcm2835-i2s-elk.ko
+$ insmod audio_rtdm.ko audio_buffer_size=<BUFFER SIZE>
+```
 
-`insmod bcm2835-i2s-elk.ko`
+If the modules are installed already as part of the Kernel you can just do instead:
 
-`insmod audio_rtdm.ko audio_buffer_size=<BUFFER SIZE>`
+```
+ $ modprobe audio_rtdm. audio_buffer_size=<BUFFER SIZE>
+```
 
-If the modules are installed already as part of the Kernel:
-
- `modprobe audio_rtdm. audio_buffer_size=<BUFFER SIZE>`
+---
+Copyright 2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
