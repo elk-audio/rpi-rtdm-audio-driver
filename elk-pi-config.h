@@ -8,7 +8,7 @@
 #define ELK_PI_CONFIG_H
 
 /* Disable this if you want to build without cv gates support */
-//#define CONFIG_CVGATES_SUPPORT
+#define CONFIG_CVGATES_SUPPORT
 
 /**
  * Cv gate gpio pin definitions
