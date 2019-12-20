@@ -45,7 +45,7 @@ $ insmod audio_rtdm.ko audio_buffer_size=<BUFFER SIZE>
 If the modules are installed already as part of the Kernel you can just do instead:
 
 ```
- $ modprobe audio_rtdm. audio_buffer_size=<BUFFER SIZE>
+ $ modprobe audio_rtdm audio_buffer_size=<BUFFER SIZE>
 ```
 
 ---
