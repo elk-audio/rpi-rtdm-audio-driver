@@ -223,13 +223,21 @@ static int bcm2835_i2s_dma_setup(struct audio_rtdm_dev *rpi_dev)
 		return -ENODEV;
 	}
 
+	rpi_dev->dma_tx->private = "rtdm-tx-irq";
+
+	/* Note: This dmaengine_resume is a way to enter the dma backend
+	and get rtdm irqs. The above initialized string is used as an
+	identifier to recognize which channels need to be real-time safe */
+
+	dmaengine_resume(rpi_dev->dma_tx);
 	rpi_dev->dma_rx = dma_request_slave_channel(dev, "rx");
 	if (!rpi_dev->dma_rx) {
 		dma_release_channel(rpi_dev->dma_tx);
 		rpi_dev->dma_tx = NULL;
 		return -ENODEV;
 	}
-
+	rpi_dev->dma_rx->private = "rtdm-rx-irq";
+	dmaengine_resume(rpi_dev->dma_rx);
 	printk(KERN_INFO "bcm2835-i2s: dma setup successful.\n");
 	return 0;
 }
