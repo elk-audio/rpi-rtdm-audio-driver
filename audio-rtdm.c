@@ -8,6 +8,8 @@
 #include <linux/kernel.h>
 #include <linux/printk.h>
 #include <linux/delay.h>
+#include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
 
 /* RTDM headers */
 #include <rtdm/driver.h>
@@ -78,7 +80,11 @@ static int audio_driver_mmap_nrt(struct rtdm_fd *fd, struct vm_area_struct *vma)
 							rtdm_fd_to_private(fd);
 	struct audio_rtdm_buffers *i2s_buffer = dev_context->i2s_dev->buffer;
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
-	return rtdm_mmap_kmem(vma, i2s_buffer->rx_buf);
+
+	return dma_mmap_coherent(dev_context->i2s_dev->dma_rx->device->dev,
+		vma,
+		i2s_buffer->rx_buf, i2s_buffer->rx_phys_addr,
+		RESERVED_BUFFER_SIZE_IN_PAGES * PAGE_SIZE);
 }
 
 static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
