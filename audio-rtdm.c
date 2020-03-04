@@ -63,11 +63,13 @@ static void audio_driver_close(struct rtdm_fd *fd)
 	int i;
 	struct audio_dev_context *dev_context = (struct audio_dev_context *)
 							rtdm_fd_to_private(fd);
-	int *tx = dev_context->i2s_dev->buffer->tx_buf;
+	struct audio_rtdm_buffers *i2s_buffer = dev_context->i2s_dev->buffer;
+	int *tx = i2s_buffer->tx_buf;
+
 	printk(KERN_INFO "audio_rtdm: audio_close.\n");
 	rtdm_event_destroy(&dev_context->i2s_dev->irq_event);
 	if (dev_context->i2s_dev->wait_flag) {
-		for (i = 0; i < dev_context->i2s_dev->buffer->buffer_len; i++) {
+		for (i = 0; i < i2s_buffer->buffer_len/4; i++) {
 			tx[i] = 0;
 		}
 		dev_context->i2s_dev->wait_flag = 0;
