@@ -7,6 +7,10 @@
 #ifndef ELK_PI_CONFIG_H
 #define ELK_PI_CONFIG_H
 
+#define DEFAULT_AUDIO_SAMPLING_RATE			48000
+#define DEFAULT_AUDIO_N_CHANNELS			8
+#define DEFAULT_AUDIO_N_FRAMES_PER_BUFFER		64
+
 /* BCM2835_I2S_CVGATES_SUPPORT should be defined (through Make file or here or a Kconfig if this module is part of kernel tree) to enable cv gates support */
 
 /**

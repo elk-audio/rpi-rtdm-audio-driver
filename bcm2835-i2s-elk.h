@@ -122,7 +122,7 @@ static inline void rpi_reg_read(void *base_addr, uint32_t reg_addr,
 }
 
 extern int bcm2835_i2s_init(int audio_buffer_size,
-						 int audio_channels);
+			int audio_channels, char *audio_hat);
 extern int bcm2835_i2s_exit(void);
 extern struct audio_rtdm_dev *bcm2835_get_i2s_dev(void);
 

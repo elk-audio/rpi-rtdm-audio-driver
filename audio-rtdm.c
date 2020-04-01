@@ -15,9 +15,11 @@
 #include <rtdm/driver.h>
 #include <rtdm/rtdm.h>
 
-#include "pcm3168a-elk.h"
-#include "bcm2835-i2s-elk.h"
 #include "audio-rtdm.h"
+#include "elk-pi-config.h"
+#include "pcm3168a-elk.h"
+#include "pcm5122-elk.h"
+#include "bcm2835-i2s-elk.h"
 
 MODULE_AUTHOR("Nitin Kulkarni (nitin@elk.audio)");
 MODULE_DESCRIPTION("RTDM audio driver for RPi");
@@ -40,6 +42,9 @@ module_param(audio_channels, uint, 0644);
 
 static uint audio_sampling_rate = DEFAULT_AUDIO_SAMPLING_RATE;
 module_param(audio_sampling_rate, uint, 0444);
+
+static char *audio_hat = "elk-pi";
+module_param(audio_hat,charp,0660);
 
 struct audio_dev_context {
 	struct audio_rtdm_dev *i2s_dev;
@@ -168,12 +173,24 @@ int audio_rtdm_init(void)
 		return -ENODEV;
 	}
 	msleep(100);
-	if (pcm3168a_codec_init()) {
-		printk(KERN_ERR "audio_rtdm: codec init failed\n");
-		return -1;
+	if (!strcmp(audio_hat, "hifi-berry")) {
+		printk(KERN_INFO "audio_rtdm: hifi-berry hat\n");
+		if (pcm5122_codec_init()) {
+			printk(KERN_ERR "audio_rtdm: codec init failed\n");
+			return -1;
+		}
+		audio_channels = 2;
+	} else if (!strcmp(audio_hat, "elk-pi")) {
+		printk(KERN_INFO "audio_rtdm: elk-pi hat\n");
+		if (pcm3168a_codec_init()) {
+			printk(KERN_ERR "audio_rtdm: codec init failed\n");
+			return -1;
+		}
+	} else {
+		printk(KERN_ERR "audio_rtdm: Unsupported hat\n");
 	}
 	msleep(100);
-	if (bcm2835_i2s_init(audio_buffer_size, audio_channels)) {
+	if (bcm2835_i2s_init(audio_buffer_size, audio_channels, audio_hat)) {
 		printk(KERN_ERR "audio_rtdm: i2s init failed\n");
 		return -1;
 	}
@@ -191,7 +208,12 @@ int audio_rtdm_init(void)
 void audio_rtdm_exit(void)
 {
 	printk(KERN_INFO "audio_rtdm: driver exiting...\n");
-	pcm3168a_codec_exit();
+	if (!strcmp(audio_hat, "hifi-berry")) {
+		pcm5122_codec_exit();
+	}
+	else if (!strcmp(audio_hat, "elk-pi")) {
+		pcm3168a_codec_exit();
+	}
 	bcm2835_i2s_exit();
 	rtdm_dev_unregister(&rtdm_audio_device);
 }

@@ -16,10 +16,6 @@
 #define AUDIO_RTDM_VERSION_MIN	2
 #define AUDIO_RTDM_VERSION_VER	0
 
-#define DEFAULT_AUDIO_SAMPLING_RATE			48000
-#define DEFAULT_AUDIO_N_CHANNELS			8
-#define DEFAULT_AUDIO_N_FRAMES_PER_BUFFER		64
-
 #define AUDIO_IOC_MAGIC		'r'
 
 /* ioctl request to wait on dma callback */
@@ -47,7 +43,7 @@ struct audio_rtdm_buffers {
 /* General audio rtdm device struct */
 struct audio_rtdm_dev {
 	struct device			*dev;
-	void __iomem			*base_addr;
+	void __iomem			*i2s_base_addr;
 	struct dma_chan			*dma_tx;
 	struct dma_chan			*dma_rx;
 	struct dma_async_tx_descriptor 	*tx_desc;
@@ -60,5 +56,9 @@ struct audio_rtdm_dev {
 	unsigned			wait_flag;
 	unsigned			buffer_idx;
 	uint64_t			kinterrupts;
+	struct clk			*clk;
+	bool				bcm_master_mode;
+	int				clk_rate;
+	char 				*audio_hat;
 };
 #endif
