@@ -1,6 +1,7 @@
 ccflags-y += -DBCM2835_I2S_CVGATES_SUPPORT
 obj-m += pcm3168a-elk.o
 obj-m += pcm5122-elk.o
+obj-m += pcm1863-elk.o
 obj-m += bcm2835-i2s-elk.o
 obj-m += audio-rtdm.o
 

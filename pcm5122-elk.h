@@ -6,6 +6,11 @@
 #ifndef PCM5122_ELK_H
 #define PCM5122_ELK_H
 
+#define PCM5122_MASTER_MODE     1
+#define PCM5122_SLAVE_MODE      0
+
+#define PCM5122_NUM_OF_CHANNELS 2
+
 #define PCM512x_VIRT_BASE 0x100
 #define PCM512x_PAGE_LEN  0x100
 #define PCM512x_PAGE_BASE(n)  (PCM512x_VIRT_BASE + (PCM512x_PAGE_LEN * n))
@@ -250,7 +255,7 @@
 #define PCM512x_AGBL_SHIFT 4
 
 
-extern int pcm5122_codec_init(void);
+extern int pcm5122_codec_init(int mode);
 extern void pcm5122_codec_exit(void);
 
 #endif

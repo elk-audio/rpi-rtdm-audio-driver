@@ -19,6 +19,7 @@
 #include "elk-pi-config.h"
 #include "pcm3168a-elk.h"
 #include "pcm5122-elk.h"
+#include "pcm1863-elk.h"
 #include "bcm2835-i2s-elk.h"
 
 MODULE_AUTHOR("Nitin Kulkarni (nitin@elk.audio)");
@@ -175,8 +176,19 @@ int audio_rtdm_init(void)
 	msleep(100);
 	if (!strcmp(audio_hat, "hifi-berry")) {
 		printk(KERN_INFO "audio_rtdm: hifi-berry hat\n");
-		if (pcm5122_codec_init()) {
+		if (pcm5122_codec_init(PCM5122_SLAVE_MODE)) {
 			printk(KERN_ERR "audio_rtdm: codec init failed\n");
+			return -1;
+		}
+		audio_channels = 2;
+	} else if (!strcmp(audio_hat, "hifi-berry-pro")) {
+		printk(KERN_INFO "audio_rtdm: hifi-berry-pro hat\n");
+		if (pcm1863_codec_init()) {
+			printk(KERN_ERR "audio_rtdm: pcm3168 codec failed\n");
+			return -1;
+		}
+		if (pcm5122_codec_init(PCM5122_MASTER_MODE)) {
+			printk(KERN_ERR "audio_rtdm: pcm5122 codec failed\n");
 			return -1;
 		}
 		audio_channels = 2;

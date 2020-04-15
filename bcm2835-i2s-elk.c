@@ -114,7 +114,7 @@ void bcm2835_i2s_start_stop(struct audio_rtdm_dev *audio_dev, int cmd)
 	if (cmd == BCM2835_I2S_START_CMD) {
 		if (!strcmp(audio_dev->audio_hat, "elk-pi")) {
 			bcm2835_i2s_synch_frame(audio_dev, mask);
-		} else if (!strcmp(audio_dev->audio_hat, "hifi-berry")) {
+		} else {
 			rpi_reg_update_bits(audio_dev->i2s_base_addr,
 				BCM2835_I2S_CS_A_REG, mask, mask);
 		}
@@ -332,6 +332,9 @@ static void bcm2835_i2s_configure(struct audio_rtdm_dev *audio_dev)
 		ch1_pos = 1;
 		ch2_pos = 33;
 		clk_prepare_enable(audio_dev->clk);
+	} else if (!strcmp(audio_dev->audio_hat, "hifi-berry-pro")) {
+		ch1_pos = 1;
+		ch2_pos = 33;
 	} else {
 		ch1_pos = 0;
 		ch2_pos = 32; /* calculated manually for now */
