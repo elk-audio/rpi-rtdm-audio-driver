@@ -57,7 +57,7 @@ struct audio_rtdm_dev {
 	unsigned			buffer_idx;
 	uint64_t			kinterrupts;
 	struct clk			*clk;
-	bool				bcm_master_mode;
+	bool				cv_gate_enabled;
 	int				clk_rate;
 	char 				*audio_hat;
 };

@@ -180,7 +180,7 @@ int audio_rtdm_init(void)
 			printk(KERN_ERR "audio_rtdm: codec init failed\n");
 			return -1;
 		}
-		audio_channels = 2;
+		audio_channels = PCM5122_NUM_OF_CHANNELS;
 	} else if (!strcmp(audio_hat, "hifi-berry-pro")) {
 		printk(KERN_INFO "audio_rtdm: hifi-berry-pro hat\n");
 		if (pcm1863_codec_init()) {
@@ -191,7 +191,7 @@ int audio_rtdm_init(void)
 			printk(KERN_ERR "audio_rtdm: pcm5122 codec failed\n");
 			return -1;
 		}
-		audio_channels = 2;
+		audio_channels = PCM5122_NUM_OF_CHANNELS;
 	} else if (!strcmp(audio_hat, "elk-pi")) {
 		printk(KERN_INFO "audio_rtdm: elk-pi hat\n");
 		if (pcm3168a_codec_init()) {
