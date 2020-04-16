@@ -255,7 +255,7 @@
 #define PCM512x_AGBL_SHIFT 4
 
 
-extern int pcm5122_codec_init(int mode);
+extern int pcm5122_codec_init(int mode, int sampling_freq);
 extern void pcm5122_codec_exit(void);
 
 #endif

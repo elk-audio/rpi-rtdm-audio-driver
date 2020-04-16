@@ -20,6 +20,8 @@
 #include "pcm3168a-elk.h"
 #include "bcm2835-i2s-elk.h"
 #include "elk-pi-config.h"
+#include "hifi-berry-config.h"
+#include "hifi-berry-pro-config.h"
 
 #define BCM2835_PCM_WORD_LEN 	32
 #define BCM2835_PCM_SLOTS	2
@@ -324,7 +326,7 @@ static void bcm2835_i2s_configure(struct audio_rtdm_dev *audio_dev)
 	if (!strcmp(audio_dev->audio_hat, "hifi-berry")) {
 		bit_clock_master = true;
 		frame_sync_master = true;
-		bclk_rate = frame_length * DEFAULT_AUDIO_SAMPLING_RATE;
+		bclk_rate = frame_length * HIFI_BERRY_SAMPLING_RATE;
 		if (clk_set_rate(audio_dev->clk, bclk_rate))
 			printk(KERN_ERR "bcm2835_i2s_configure: clk_set_rate failed\n");
 

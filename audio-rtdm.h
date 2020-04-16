@@ -29,6 +29,17 @@
 /* ioctl to stop receiving audio callbacks */
 #define AUDIO_PROC_STOP			_IO(AUDIO_IOC_MAGIC, 5)
 
+/**
+ * @brief Enumeration to denote various codec sample formats
+ */
+enum CodecSampleFormat
+{
+	INT24_LJ = 1,
+	INT24_I2S,
+	INT24_RJ,
+	INT32_RJ
+};
+
 struct audio_rtdm_buffers {
 	uint32_t 	 	*cv_gate_out;
 	uint32_t 	 	*cv_gate_in;

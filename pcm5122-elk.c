@@ -12,7 +12,6 @@
 #include <linux/delay.h>
 
 #include "pcm5122-elk.h"
-#include "elk-pi-config.h"
 
 #define PCM5122_I2C_BUS_NUM 	1
 #define PCM5122_SCLK_RATE 	24576000
@@ -40,10 +39,17 @@ static int pcm5122_reg_write(struct i2c_client *dev,
 }
 
 static int pcm5122_config_codec(struct i2c_client *dev,
-					int mode)
+				int mode, int sampling_freq)
 {
 	int ret = -1;
 	printk("pcm5122_config_codec: mode = %d\n",mode);
+
+	if(sampling_freq != 48000) {
+		printk(KERN_ERR "pcm5122: Unsupported sampling freq %d",
+			sampling_freq);
+			return ret;
+	}
+
 	/* select page 0*/
 	if(pcm5122_reg_write(dev, 0x00, 0x00)) {
 		return ret;
@@ -91,7 +97,7 @@ static int pcm5122_config_codec(struct i2c_client *dev,
 		}
 		/* set the LR clk divider from bit clk*/
 		if(pcm5122_reg_write(dev, PCM512x_MASTER_CLKDIV_2,
-		PCM5122_BCLK_RATE/DEFAULT_AUDIO_SAMPLING_RATE - 1)) {
+		PCM5122_BCLK_RATE/sampling_freq - 1)) {
 			return ret;
 		}
 
@@ -121,7 +127,7 @@ static int pcm5122_config_codec(struct i2c_client *dev,
 	return 0;
 }
 
-int pcm5122_codec_init(int mode)
+int pcm5122_codec_init(int mode, int sampling_freq)
 {
 	struct i2c_client *client = NULL;
 	struct i2c_adapter *adapter = NULL;
@@ -137,7 +143,7 @@ int pcm5122_codec_init(int mode)
 		return -1;
 	}
 
-	if (pcm5122_config_codec(client, mode)) {
+	if (pcm5122_config_codec(client, mode, sampling_freq)) {
 		printk(KERN_ERR "pcm5122-elk: config_codec failed\n");
 		return -1;
 	}

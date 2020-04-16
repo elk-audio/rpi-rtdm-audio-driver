@@ -12,7 +12,6 @@
 #include <linux/delay.h>
 
 #include "pcm1863-elk.h"
-#include "elk-pi-config.h"
 
 #define PCM1863_I2C_BUS_NUM 1
 
