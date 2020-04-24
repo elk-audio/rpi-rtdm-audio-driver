@@ -1,15 +1,10 @@
-/**
- * @file rpi-rtdm-i2c.h
- * @author Nitin Kulkarni (nitin.kulkarni@mindmusiclabs.com)
- * @brief 
- * @version 0.1
- * @date 2019-06-11
- * 
- * @copyright MIND music labs (c) 2019
- * 
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * @copyright 2017-2019 Modern Ancient Instruments Networked AB, dba Elk,
+ * Stockholm
  */
-#ifndef RPI_RTDM_CODEC_UTILS_H
-#define RPI_RTDM_CODEC_UTILS_H
+#ifndef PCM3168A_ELK_H
+#define PCM3168A_ELK_H
 
 /* Clock generator related definitions */
 
@@ -61,7 +56,7 @@
 #define DAC_MASTER_MODE_192xFS			0x50
 #define DAC_MASTER_MODE_128xFS			0x60
 // bits 3:0
-#define DAC_I2S_24_BIT_MODE_MASK		0x00 
+#define DAC_I2S_24_BIT_MODE_MASK		0x00
 #define DAC_LJ_24_BIT_MODE_MASK			0x01
 #define DAC_RJ_24_BIT_MODE_MASK			0x02
 #define DAC_RJ_16_BIT_MODE_MASK			0x03
@@ -91,7 +86,7 @@
 #define DAC_CHAN_6_7_SLOW_ROLLOFF_ENABLE_MASK	0x08
 
 /* DAC Output phase masks */
-#define DAC_CHAN_0_PHASE_NO_INVERT_MASK		0x00		
+#define DAC_CHAN_0_PHASE_NO_INVERT_MASK		0x00
 #define DAC_CHAN_0_PHASE_INVERT_MASK		0x01
 #define DAC_CHAN_1_PHASE_NO_INVERT_MASK		0x00
 #define DAC_CHAN_1_PHASE_INVERT_MASK		0x02
@@ -218,6 +213,7 @@
 #define ADC_ATTEN_SPEED_FAST_MASK			0x00
 #define ADC_ATTEN_SPEED_SLOW_MASK			0x40
 
-extern int i2c_init(void);
-extern int i2c_exit(void);
+extern int pcm3168a_codec_init(void);
+extern void pcm3168a_codec_exit(void);
+
 #endif
