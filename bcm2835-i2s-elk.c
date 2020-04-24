@@ -22,7 +22,7 @@
 
 static struct audio_rtdm_dev *audio_static_dev;
 
-#ifdef BCM2835_i2S_CVGATES_SUPPORT
+#ifdef BCM2835_I2S_CVGATES_SUPPORT
 static int cv_gate_out[NUM_OF_CVGATE_OUTS] = { CVGATE_OUTS_LIST };
 static int cv_gate_in[NUM_OF_CVGATE_INS] = { CVGATE_INS_LIST };
 #endif
@@ -118,7 +118,7 @@ static void bcm2835_i2s_dma_callback(void *data)
 	if (dev->wait_flag) {
 		rtdm_event_signal(&dev->irq_event);
 
-#ifdef BCM2835_i2S_CVGATES_SUPPORT
+#ifdef BCM2835_I2S_CVGATES_SUPPORT
 		for (i = 0; i < NUM_OF_CVGATE_OUTS; i++) {
 			val = (unsigned long) *dev->buffer->cv_gate_out &
 			 BIT(i);
@@ -223,18 +223,26 @@ static int bcm2835_i2s_dma_setup(struct audio_rtdm_dev *rpi_dev)
 		return -ENODEV;
 	}
 
+	rpi_dev->dma_tx->private = "rtdm-tx-irq";
+
+	/* Note: This dmaengine_resume is a way to enter the dma backend
+	and get rtdm irqs. The above initialized string is used as an
+	identifier to recognize which channels need to be real-time safe */
+
+	dmaengine_resume(rpi_dev->dma_tx);
 	rpi_dev->dma_rx = dma_request_slave_channel(dev, "rx");
 	if (!rpi_dev->dma_rx) {
 		dma_release_channel(rpi_dev->dma_tx);
 		rpi_dev->dma_tx = NULL;
 		return -ENODEV;
 	}
-
+	rpi_dev->dma_rx->private = "rtdm-rx-irq";
+	dmaengine_resume(rpi_dev->dma_rx);
 	printk(KERN_INFO "bcm2835-i2s: dma setup successful.\n");
 	return 0;
 }
 
-#ifdef BCM2835_i2S_CVGATES_SUPPORT
+#ifdef BCM2835_I2S_CVGATES_SUPPORT
 static int bcm2835_init_cv_gates(void)
 {
 	int  i, ret;
@@ -493,7 +501,7 @@ int bcm2835_i2s_probe(struct platform_device *pdev)
 	bcm2835_i2s_clear_regs(dev);
 	bcm2835_i2s_configure(dev);
 
-#ifdef BCM2835_i2S_CVGATES_SUPPORT
+#ifdef BCM2835_I2S_CVGATES_SUPPORT
 	bcm2835_init_cv_gates();
 #endif
 
@@ -519,7 +527,7 @@ static int bcm2835_i2s_remove(struct platform_device *pdev)
 	bcm2835_i2s_start_stop(audio_static_dev, BCM2835_I2S_STOP_CMD);
 	kfree(audio_buffers);
 
-#ifdef BCM2835_i2S_CVGATES_SUPPORT
+#ifdef BCM2835_I2S_CVGATES_SUPPORT
 	bcm2835_free_cv_gates();
 #endif
 	devm_iounmap(&pdev->dev, (void *)audio_static_dev->base_addr);

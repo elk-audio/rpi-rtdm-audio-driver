@@ -1,9 +1,12 @@
 *.ko
 *.mod.c
 *.o
+*.o.d
 .vscode*
 *.cmd
 *.ko.cmd
 *.tmp_versions
 Module.symvers
 modules.order
+build/
+scratch/
