@@ -60,7 +60,7 @@ static uint audio_format = DEFAULT_AUDIO_CODEC_FORMAT;
 module_param(audio_format, uint, 0444);
 
 static char *audio_hat = "elk-pi";
-module_param(audio_hat, charp,0660);
+module_param(audio_hat, charp, 0660);
 
 struct audio_dev_context {
 	struct audio_rtdm_dev *i2s_dev;
@@ -252,8 +252,7 @@ void audio_rtdm_exit(void)
 	printk(KERN_INFO "audio_rtdm: driver exiting...\n");
 	if (!strcmp(audio_hat, "hifi-berry")) {
 		pcm5122_codec_exit();
-	}
-	else if (!strcmp(audio_hat, "elk-pi")) {
+	} else if (!strcmp(audio_hat, "elk-pi")) {
 		pcm3168a_codec_exit();
 	}
 	bcm2835_i2s_exit();

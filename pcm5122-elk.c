@@ -42,86 +42,86 @@ static int pcm5122_config_codec(struct i2c_client *dev,
 				int mode, int sampling_freq)
 {
 	int ret = -1;
-	printk("pcm5122_config_codec: mode = %d\n",mode);
+	printk("pcm5122_config_codec: mode = %d\n", mode);
 
-	if(sampling_freq != 48000) {
+	if (sampling_freq != 48000) {
 		printk(KERN_ERR "pcm5122: Unsupported sampling freq %d",
 			sampling_freq);
 			return ret;
 	}
 
 	/* select page 0*/
-	if(pcm5122_reg_write(dev, 0x00, 0x00)) {
+	if (pcm5122_reg_write(dev, 0x00, 0x00)) {
 		return ret;
 	}
 	/* power off */
-	if(pcm5122_reg_write(dev, PCM512x_POWER, PCM512x_RQPD)) {
+	if (pcm5122_reg_write(dev, PCM512x_POWER, PCM512x_RQPD)) {
 		return ret;
 	}
 	/* power on in stand by mode */
-	if(pcm5122_reg_write(dev, PCM512x_POWER, PCM512x_RQST)) {
+	if (pcm5122_reg_write(dev, PCM512x_POWER, PCM512x_RQST)) {
 		return ret;
 	}
 	/* reset regs */
-	if(pcm5122_reg_write(dev, PCM512x_RESET, PCM512x_RSTM | PCM512x_RSTR)) {
+	if (pcm5122_reg_write(dev, PCM512x_RESET, PCM512x_RSTM | PCM512x_RSTR)) {
 		return ret;
 	}
 	/* I2S format 32-bit SE */
-	if(pcm5122_reg_write(dev, PCM512x_I2S_1, PCM512x_AFMT_I2S |
+	if (pcm5122_reg_write(dev, PCM512x_I2S_1, PCM512x_AFMT_I2S |
 						PCM512x_ALEN_32)) {
 		return ret;
 	}
 
 	if (mode == PCM5122_MASTER_MODE) {
 		/* enable GPIO3 for the clk generator */
-		if(pcm5122_reg_write(dev, PCM512x_GPIO_EN, PCM512x_G3OE)) {
+		if (pcm5122_reg_write(dev, PCM512x_GPIO_EN, PCM512x_G3OE)) {
 			return ret;
 		}
 
-		if(pcm5122_reg_write(dev, PCM512x_GPIO_OUTPUT_3, 0x02)) {
+		if (pcm5122_reg_write(dev, PCM512x_GPIO_OUTPUT_3, 0x02)) {
 			return ret;
 		}
 
-		if(pcm5122_reg_write(dev, PCM512x_GPIO_CONTROL_1, 0x04)) {
+		if (pcm5122_reg_write(dev, PCM512x_GPIO_CONTROL_1, 0x04)) {
 			return ret;
 		}
 
-		if(pcm5122_reg_write(dev, PCM512x_BCLK_LRCLK_CFG, PCM512x_LRKO |
+		if (pcm5122_reg_write(dev, PCM512x_BCLK_LRCLK_CFG, PCM512x_LRKO |
 					PCM512x_BCKO)) {
 			return ret;
 		}
 		/* set the bit clk divider from sclk*/
-		if(pcm5122_reg_write(dev, PCM512x_MASTER_CLKDIV_1,
+		if (pcm5122_reg_write(dev, PCM512x_MASTER_CLKDIV_1,
 		PCM5122_SCLK_RATE/PCM5122_BCLK_RATE - 1)) {
 			return ret;
 		}
 		/* set the LR clk divider from bit clk*/
-		if(pcm5122_reg_write(dev, PCM512x_MASTER_CLKDIV_2,
+		if (pcm5122_reg_write(dev, PCM512x_MASTER_CLKDIV_2,
 		PCM5122_BCLK_RATE/sampling_freq - 1)) {
 			return ret;
 		}
 
-		if(pcm5122_reg_write(dev, PCM512x_MASTER_MODE, PCM512x_RLRK |
+		if (pcm5122_reg_write(dev, PCM512x_MASTER_MODE, PCM512x_RLRK |
 			PCM512x_RBCK)) {
 			return ret;
 		}
 	} else {
-		if(pcm5122_reg_write(dev, PCM512x_PLL_REF, PCM512x_SREF_BCK)) {
+		if (pcm5122_reg_write(dev, PCM512x_PLL_REF, PCM512x_SREF_BCK)) {
 			return ret;
 		}
 
-		if(pcm5122_reg_write(dev, PCM512x_DAC_REF, PCM512x_SDAC_PLL)) {
+		if (pcm5122_reg_write(dev, PCM512x_DAC_REF, PCM512x_SDAC_PLL)) {
 			return ret;
 		}
 	}
 
-	if(pcm5122_reg_write(dev, PCM512x_ERROR_DETECT, PCM512x_IDSK |
+	if (pcm5122_reg_write(dev, PCM512x_ERROR_DETECT, PCM512x_IDSK |
 				PCM512x_IDBK | PCM512x_IDSK |
 		PCM512x_IDCH)) {
 			return ret;
 	}
 	/* get out of standby mode */
-	if(pcm5122_reg_write(dev, PCM512x_POWER, 0x00)) {
+	if (pcm5122_reg_write(dev, PCM512x_POWER, 0x00)) {
 			return ret;
 	}
 	return 0;
@@ -139,7 +139,7 @@ int pcm5122_codec_init(int mode, int sampling_freq)
 
 	client = i2c_new_device(adapter, i2c_pcm5122_board_info);
 	if (!client) {
-		printk( KERN_ERR "pcm5122: Failed to get i2c client 5122\n");
+		printk(KERN_ERR "pcm5122: Failed to get i2c client 5122\n");
 		return -1;
 	}
 

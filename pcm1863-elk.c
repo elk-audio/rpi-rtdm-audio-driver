@@ -40,25 +40,25 @@ static int pcm1863_config_codec(struct i2c_client *dev)
 {
 	int ret = -1;
 	/* select page 0*/
-	if(pcm1863_reg_write(dev, PCM186X_PAGE, 0x00)) {
+	if (pcm1863_reg_write(dev, PCM186X_PAGE, 0x00)) {
 		return ret;
 	}
 	/* reset registers */
-	if(pcm1863_reg_write(dev, PCM186X_PAGE, PCM186X_RESET)) {
+	if (pcm1863_reg_write(dev, PCM186X_PAGE, PCM186X_RESET)) {
 		return ret;
 	}
 
-	if(pcm1863_reg_write(dev, PCM186X_CLK_CTRL,
+	if (pcm1863_reg_write(dev, PCM186X_CLK_CTRL,
 				 PCM186X_CLK_CTRL_CLKDET_EN)) {
 		return ret;
 	}
 
-	if(pcm1863_reg_write(dev, PCM186X_PLL_CTRL,
+	if (pcm1863_reg_write(dev, PCM186X_PLL_CTRL,
 				 PCM186X_PLL_CTRL_REF_SEL)) {
 		return ret;
 	}
 
-	if(pcm1863_reg_write(dev, PCM186X_PCM_CFG,
+	if (pcm1863_reg_write(dev, PCM186X_PCM_CFG,
 				 PCM186X_PCM_CFG_RX_WLEN_32 |
 				 PCM186X_PCM_CFG_TX_WLEN_32 |
 				 PCM186X_PCM_CFG_FMT_I2S)) {
@@ -79,7 +79,7 @@ int pcm1863_codec_init(void)
 
 	client = i2c_new_device(adapter, i2c_pcm1863_board_info);
 	if (!client) {
-		printk( KERN_ERR "pcm1863-elk: Failed to get i2c client\n");
+		printk(KERN_ERR "pcm1863-elk: Failed to get i2c client\n");
 		return -1;
 	}
 

@@ -98,14 +98,14 @@ static int pcm3168a_config_clk_gen(struct i2c_client *dev)
 	int i, ret = -1;
 
 	for (i = CLKGEN_CLK0_CNTRL_REG; i <= CLKGEN_CLK7_CNTRL_REG; i++) {
-		if(pcm3168_reg_write(dev, i, CLKGEN_CLK_PWR_DWN_MASK))
+		if (pcm3168_reg_write(dev, i, CLKGEN_CLK_PWR_DWN_MASK))
 		return ret;
 	}
 	msleep(50);
 	for (i = 0; i < CLKGEN_NUM_OF_REGS; i++) {
-		if(pcm3168_reg_write(dev, cmd[0], cmd[1]))
+		if (pcm3168_reg_write(dev, cmd[0], cmd[1]))
 			return ret;
-		cmd+=2;
+		cmd += 2;
 		msleep(5);
 	}
 	if (pcm3168_reg_write(dev, CLKGEN_PLL_RESET_REG,
@@ -113,7 +113,7 @@ static int pcm3168a_config_clk_gen(struct i2c_client *dev)
 		return ret;
 	}
 	msleep(5);
-	if(pcm3168_reg_write(dev, CLKGEN_OUTPUT_EN_CNTRL_REG,
+	if (pcm3168_reg_write(dev, CLKGEN_OUTPUT_EN_CNTRL_REG,
 		CLKGEN_EN_OUTPUT_MASK)) {
 		return ret;
 	}
@@ -124,7 +124,7 @@ static int pcm3168a_config_codec(struct i2c_client *i2c_client_dev)
 {
 	int ret = -1;
 
-	if(pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_TWO_REG,
+	if (pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_TWO_REG,
 		0x00 | DAC_CHAN_0_1_DISABLED_MODE_MASK |
 			DAC_CHAN_2_3_DISABLED_MODE_MASK |
 			DAC_CHAN_4_5_DISABLED_MODE_MASK |
@@ -132,26 +132,26 @@ static int pcm3168a_config_codec(struct i2c_client *i2c_client_dev)
 		return ret;
 	}
 
-	if(pcm3168_reg_write(i2c_client_dev, PCM_ADC_CNTRL_TWO_REG,
+	if (pcm3168_reg_write(i2c_client_dev, PCM_ADC_CNTRL_TWO_REG,
 		0x00 | ADC_CHAN_0_1_POWER_SAVE_ENABLE_MASK |
 			ADC_CHAN_2_3_POWER_SAVE_ENABLE_MASK |
 			ADC_CHAN_4_5_POWER_SAVE_ENABLE_MASK)) {
 		return ret;
 	}
 
-	if(pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_ONE_REG,
+	if (pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_ONE_REG,
 		0x00 | DAC_SLAVE_MODE_MASK | DAC_LJ_24_BIT_TDM_MODE_MASK)) {
 		return ret;
 	}
 
-	if(pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_THREE_REG,
+	if (pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_THREE_REG,
 		0x00 | DAC_MASTER_VOLUME_CONTROL_MODE_MASK |
 			DAC_ATTEN_SPEED_SLOW_MASK |
 			DAC_DEMPH_DISABLE_MASK)) {
 		return ret;
 	}
 
-	if(pcm3168_reg_write(i2c_client_dev, PCM_ADC_CONTROL_THREE_REG,
+	if (pcm3168_reg_write(i2c_client_dev, PCM_ADC_CONTROL_THREE_REG,
 		0x00 | ADC_MASTER_VOLUME_CONTROL_MODE_MASK |
 			ADC_ATTEN_SPEED_SLOW_MASK)) {
 		return ret;
@@ -161,14 +161,14 @@ static int pcm3168a_config_codec(struct i2c_client *i2c_client_dev)
 	* -> Master where master clock is 512xfs
 	* -> data format is left justified 24 bit TDM
 	*/
-	if(pcm3168_reg_write(i2c_client_dev, PCM_ADC_CNTRL_ONE_REG,
+	if (pcm3168_reg_write(i2c_client_dev, PCM_ADC_CNTRL_ONE_REG,
 		0x00 | ADC_MASTER_MODE_512xFS |
 			ADC_LJ_24_BIT_TDM_MODE_MASK)) {
 		return ret;
 	}
 
 	// Power up both DAC and ADC
-	if(pcm3168_reg_write(i2c_client_dev, PCM_ADC_CNTRL_TWO_REG,
+	if (pcm3168_reg_write(i2c_client_dev, PCM_ADC_CNTRL_TWO_REG,
 		0x00 | ADC_CHAN_0_1_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_2_3_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_4_5_POWER_SAVE_DISABLE_MASK |
@@ -176,7 +176,7 @@ static int pcm3168a_config_codec(struct i2c_client *i2c_client_dev)
 		return ret;
 	}
 
-	if(pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_TWO_REG,
+	if (pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_TWO_REG,
 		0x00 | DAC_CHAN_0_1_NORMAL_MODE_MASK |
 			DAC_CHAN_2_3_NORMAL_MODE_MASK |
 			DAC_CHAN_4_5_NORMAL_MODE_MASK |
