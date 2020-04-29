@@ -77,117 +77,112 @@ static struct i2c_board_info i2c_pcm3168a_board_info[] =  {
 	}
 };
 
-static int pcm3168a_config_clk_gen(struct i2c_client *i2c_client_dev)
+static int pcm3168_reg_write(struct i2c_client *dev,
+				unsigned int reg, unsigned int val)
 {
+	int ret;
 	char cmd[2];
-	int i, ret = 0;
+	cmd[0] = reg & 0xff;
+	cmd[1] = val;
+	ret = i2c_master_send(dev, (const char *)cmd, 2);
+	if (ret < 0) {
+		printk("pcm5122: Failed to write reg\n");
+		return ret;
+	}
+	return 0;
+}
+
+static int pcm3168a_config_clk_gen(struct i2c_client *dev)
+{
+	uint8_t *cmd = &clkgen_reg_val_lookup[0][0];
+	int i, ret = -1;
 
 	for (i = CLKGEN_CLK0_CNTRL_REG; i <= CLKGEN_CLK7_CNTRL_REG; i++) {
-		cmd[0] = i;
-		cmd[1] = CLKGEN_CLK_PWR_DWN_MASK;
-		ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-		if (ret < 0)
-			return ret;
+		if (pcm3168_reg_write(dev, i, CLKGEN_CLK_PWR_DWN_MASK))
+		return ret;
 	}
 	msleep(50);
 	for (i = 0; i < CLKGEN_NUM_OF_REGS; i++) {
-		ret = i2c_master_send(i2c_client_dev,
-				&clkgen_reg_val_lookup[i][0], 2);
-		if (ret < 0)
+		if (pcm3168_reg_write(dev, cmd[0], cmd[1]))
 			return ret;
-		msleep(20);
+		cmd += 2;
+		msleep(5);
 	}
-
-	cmd[0] = CLKGEN_PLL_RESET_REG;
-	cmd[1] = CLKGEN_PLL_RESET_MASK;
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+	if (pcm3168_reg_write(dev, CLKGEN_PLL_RESET_REG,
+		CLKGEN_PLL_RESET_MASK)){
 		return ret;
-	msleep(50);
-	cmd[0] = CLKGEN_OUTPUT_EN_CNTRL_REG;
-	cmd[1] = CLKGEN_EN_OUTPUT_MASK;
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+	}
+	msleep(5);
+	if (pcm3168_reg_write(dev, CLKGEN_OUTPUT_EN_CNTRL_REG,
+		CLKGEN_EN_OUTPUT_MASK)) {
 		return ret;
-
+	}
 	return 0;
 }
 
 static int pcm3168a_config_codec(struct i2c_client *i2c_client_dev)
 {
-	char cmd[2];
-	int ret;
+	int ret = -1;
 
-	cmd[0] = PCM_DAC_CNTRL_TWO_REG;
-	cmd[1] = 0x00 | DAC_CHAN_0_1_DISABLED_MODE_MASK |
+	if (pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_TWO_REG,
+		0x00 | DAC_CHAN_0_1_DISABLED_MODE_MASK |
 			DAC_CHAN_2_3_DISABLED_MODE_MASK |
 			DAC_CHAN_4_5_DISABLED_MODE_MASK |
-			DAC_CHAN_6_7_DISABLED_MODE_MASK;
-
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+			DAC_CHAN_6_7_DISABLED_MODE_MASK)) {
 		return ret;
+	}
 
-	cmd[0] = PCM_ADC_CNTRL_TWO_REG;
-	cmd[1] = 0x00 | ADC_CHAN_0_1_POWER_SAVE_ENABLE_MASK |
+	if (pcm3168_reg_write(i2c_client_dev, PCM_ADC_CNTRL_TWO_REG,
+		0x00 | ADC_CHAN_0_1_POWER_SAVE_ENABLE_MASK |
 			ADC_CHAN_2_3_POWER_SAVE_ENABLE_MASK |
-			ADC_CHAN_4_5_POWER_SAVE_ENABLE_MASK;
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+			ADC_CHAN_4_5_POWER_SAVE_ENABLE_MASK)) {
 		return ret;
+	}
 
-	cmd[0] = PCM_DAC_CNTRL_ONE_REG;
-	cmd[1] = 0x00 | DAC_SLAVE_MODE_MASK | DAC_LJ_24_BIT_TDM_MODE_MASK;
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+	if (pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_ONE_REG,
+		0x00 | DAC_SLAVE_MODE_MASK | DAC_LJ_24_BIT_TDM_MODE_MASK)) {
 		return ret;
+	}
 
-	cmd[0] = PCM_DAC_CNTRL_THREE_REG;
-	cmd[1] = 0x00 | DAC_MASTER_VOLUME_CONTROL_MODE_MASK |
+	if (pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_THREE_REG,
+		0x00 | DAC_MASTER_VOLUME_CONTROL_MODE_MASK |
 			DAC_ATTEN_SPEED_SLOW_MASK |
-			DAC_DEMPH_DISABLE_MASK;
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+			DAC_DEMPH_DISABLE_MASK)) {
 		return ret;
+	}
 
-	cmd[0] = PCM_ADC_CONTROL_THREE_REG;
-	cmd[1] = 0x00 | ADC_MASTER_VOLUME_CONTROL_MODE_MASK |
-			ADC_ATTEN_SPEED_SLOW_MASK;
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+	if (pcm3168_reg_write(i2c_client_dev, PCM_ADC_CONTROL_THREE_REG,
+		0x00 | ADC_MASTER_VOLUME_CONTROL_MODE_MASK |
+			ADC_ATTEN_SPEED_SLOW_MASK)) {
 		return ret;
-
+	}
 	/**
 	* ADC settings
 	* -> Master where master clock is 512xfs
 	* -> data format is left justified 24 bit TDM
 	*/
-	cmd[0] = PCM_ADC_CNTRL_ONE_REG;
-	cmd[1] = 0x00 | ADC_MASTER_MODE_512xFS |
-			ADC_LJ_24_BIT_TDM_MODE_MASK;
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+	if (pcm3168_reg_write(i2c_client_dev, PCM_ADC_CNTRL_ONE_REG,
+		0x00 | ADC_MASTER_MODE_512xFS |
+			ADC_LJ_24_BIT_TDM_MODE_MASK)) {
 		return ret;
+	}
 
 	// Power up both DAC and ADC
-	cmd[0] = PCM_ADC_CNTRL_TWO_REG;
-	cmd[1] = 0x00 | ADC_CHAN_0_1_POWER_SAVE_DISABLE_MASK |
+	if (pcm3168_reg_write(i2c_client_dev, PCM_ADC_CNTRL_TWO_REG,
+		0x00 | ADC_CHAN_0_1_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_2_3_POWER_SAVE_DISABLE_MASK |
 			ADC_CHAN_4_5_POWER_SAVE_DISABLE_MASK |
-			ADC_CHAN_4_5_NO_HPF_MASK;
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+			ADC_CHAN_4_5_NO_HPF_MASK)) {
 		return ret;
+	}
 
-	cmd[0] = PCM_DAC_CNTRL_TWO_REG;
-	cmd[1] = 0x00 | DAC_CHAN_0_1_NORMAL_MODE_MASK |
+	if (pcm3168_reg_write(i2c_client_dev, PCM_DAC_CNTRL_TWO_REG,
+		0x00 | DAC_CHAN_0_1_NORMAL_MODE_MASK |
 			DAC_CHAN_2_3_NORMAL_MODE_MASK |
 			DAC_CHAN_4_5_NORMAL_MODE_MASK |
-			DAC_CHAN_6_7_NORMAL_MODE_MASK;
-	ret = i2c_master_send(i2c_client_dev, (const char *)cmd, 2);
-	if (ret < 0)
+			DAC_CHAN_6_7_NORMAL_MODE_MASK)) {
 		return ret;
-
+	}
 	return 0;
 }
 
