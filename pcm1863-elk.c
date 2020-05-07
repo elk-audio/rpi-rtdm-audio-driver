@@ -64,6 +64,11 @@ static int pcm1863_config_codec(struct i2c_client *dev)
 				 PCM186X_PCM_CFG_FMT_I2S)) {
 		return ret;
 	}
+
+	if (pcm1863_reg_write(dev, PCM186X_FILTER_MUTE_CTRL,
+				 PCM186x_LOW_LATENCY_IIR)) {
+		return ret;
+	}
 	return 0;
 }
 

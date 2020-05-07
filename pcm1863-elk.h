@@ -149,6 +149,9 @@
 #define PCM186X_PCM_CFG_FMT_RIGHTJ	0x02
 #define PCM186X_PCM_CFG_FMT_TDM		0x03
 
+/* Page 0, Register 113 - Digital Filter */
+#define PCM186x_LOW_LATENCY_IIR 0x30
+
 /* PCM186X_TDM_TX_SEL */
 #define PCM186X_TDM_TX_SEL_2CH		0x00
 #define PCM186X_TDM_TX_SEL_4CH		0x01

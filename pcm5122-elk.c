@@ -72,6 +72,11 @@ static int pcm5122_config_codec(struct i2c_client *dev,
 		return ret;
 	}
 
+    if (pcm5122_reg_write(dev, PCM512x_DSP_PROGRAM,
+                            PCM512x_LOW_LATENCY_IIR)) {
+		return ret;
+	}
+
 	if (mode == PCM5122_MASTER_MODE) {
 		/* enable GPIO3 for the clk generator */
 		if (pcm5122_reg_write(dev, PCM512x_GPIO_EN, PCM512x_G3OE)) {
