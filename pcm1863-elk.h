@@ -197,7 +197,7 @@
 #define PCM186X_MMAP_STAT_R_REQ		BIT(1)
 #define PCM186X_MMAP_STAT_W_REQ		BIT(0)
 
-extern int pcm1863_codec_init(void);
+extern int pcm1863_codec_init(bool enable_low_latency);
 extern void pcm1863_codec_exit(void);
 
 #endif

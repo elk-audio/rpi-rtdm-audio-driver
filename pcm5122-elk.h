@@ -258,7 +258,8 @@
 #define PCM512x_AGBL_SHIFT 4
 
 
-extern int pcm5122_codec_init(int mode, int sampling_freq);
+extern int pcm5122_codec_init(int mode, int sampling_freq,
+                                bool enable_low_latency);
 extern void pcm5122_codec_exit(void);
 
 #endif
