@@ -60,7 +60,7 @@ static uint audio_format = DEFAULT_AUDIO_CODEC_FORMAT;
 module_param(audio_format, uint, 0444);
 
 static char *audio_hat = "elk-pi";
-module_param(audio_hat, charp, 0660);
+module_param(audio_hat, charp, 0644);
 
 struct audio_dev_context {
 	struct audio_rtdm_dev *i2s_dev;
