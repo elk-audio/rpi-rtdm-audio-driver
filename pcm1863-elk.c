@@ -36,7 +36,7 @@ static int pcm1863_reg_write(struct i2c_client *dev,
 	return 0;
 }
 
-static int pcm1863_config_codec(struct i2c_client *dev)
+static int pcm1863_config_codec(struct i2c_client *dev, bool enable_low_latency)
 {
 	int ret = -1;
 	/* select page 0*/
@@ -64,10 +64,17 @@ static int pcm1863_config_codec(struct i2c_client *dev)
 				 PCM186X_PCM_CFG_FMT_I2S)) {
 		return ret;
 	}
+
+	if (enable_low_latency) {
+		if (pcm1863_reg_write(dev, PCM186X_FILTER_MUTE_CTRL,
+					PCM186x_LOW_LATENCY_IIR)) {
+			return ret;
+		}
+	}
 	return 0;
 }
 
-int pcm1863_codec_init(void)
+int pcm1863_codec_init(bool enable_low_latency)
 {
 	struct i2c_client *client = NULL;
 	struct i2c_adapter *adapter = NULL;
@@ -83,7 +90,7 @@ int pcm1863_codec_init(void)
 		return -1;
 	}
 
-	if (pcm1863_config_codec(client)) {
+	if (pcm1863_config_codec(client, enable_low_latency)) {
 		printk(KERN_ERR "pcm1863-elk: config_codec failed\n");
 		return -1;
 	}

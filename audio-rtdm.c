@@ -34,6 +34,7 @@ MODULE_LICENSE("GPL");
 #define DEFAULT_AUDIO_NUM_CODEC_CHANNELS		8
 #define DEFAULT_AUDIO_N_FRAMES_PER_BUFFER		64
 #define DEFAULT_AUDIO_CODEC_FORMAT			INT24_LJ
+#define DEFAULT_AUDIO_LOW_LATENCY_VAL			1
 
 static uint audio_ver_maj = AUDIO_RTDM_VERSION_MAJ;
 module_param(audio_ver_maj, uint, 0644);
@@ -61,6 +62,9 @@ module_param(audio_format, uint, 0444);
 
 static char *audio_hat = "elk-pi";
 module_param(audio_hat, charp, 0644);
+
+static uint audio_enable_low_latency = DEFAULT_AUDIO_LOW_LATENCY_VAL;
+module_param(audio_enable_low_latency, uint, 0644);
 
 struct audio_dev_context {
 	struct audio_rtdm_dev *i2s_dev;
@@ -192,7 +196,8 @@ int audio_rtdm_init(void)
 	if (!strcmp(audio_hat, "hifi-berry")) {
 		printk(KERN_INFO "audio_rtdm: hifi-berry hat\n");
 		if (pcm5122_codec_init(HIFI_BERRY_DAC_MODE,
-				HIFI_BERRY_SAMPLING_RATE)) {
+				HIFI_BERRY_SAMPLING_RATE,
+				audio_enable_low_latency)) {
 			printk(KERN_ERR "audio_rtdm: codec init failed\n");
 			return -1;
 		}
@@ -203,12 +208,13 @@ int audio_rtdm_init(void)
 		audio_sampling_rate = HIFI_BERRY_SAMPLING_RATE;
 	} else if (!strcmp(audio_hat, "hifi-berry-pro")) {
 		printk(KERN_INFO "audio_rtdm: hifi-berry-pro hat\n");
-		if (pcm1863_codec_init()) {
+		if (pcm1863_codec_init(audio_enable_low_latency)) {
 			printk(KERN_ERR "audio_rtdm: pcm3168 codec failed\n");
 			return -1;
 		}
 		if (pcm5122_codec_init(HIFI_BERRY_PRO_DAC_MODE,
-					HIFI_BERRY_PRO_SAMPLING_RATE)) {
+					HIFI_BERRY_PRO_SAMPLING_RATE,
+					audio_enable_low_latency)) {
 			printk(KERN_ERR "audio_rtdm: pcm5122 codec failed\n");
 			return -1;
 		}

@@ -39,7 +39,7 @@ static int pcm5122_reg_write(struct i2c_client *dev,
 }
 
 static int pcm5122_config_codec(struct i2c_client *dev,
-				int mode, int sampling_freq)
+				int mode, int sampling_freq, bool enable_low_latency)
 {
 	int ret = -1;
 	printk("pcm5122_config_codec: mode = %d\n", mode);
@@ -70,6 +70,13 @@ static int pcm5122_config_codec(struct i2c_client *dev,
 	if (pcm5122_reg_write(dev, PCM512x_I2S_1, PCM512x_AFMT_I2S |
 						PCM512x_ALEN_32)) {
 		return ret;
+	}
+
+	if (enable_low_latency) {
+		if (pcm5122_reg_write(dev, PCM512x_DSP_PROGRAM,
+			PCM512x_LOW_LATENCY_IIR)) {
+			return ret;
+		}
 	}
 
 	if (mode == PCM5122_MASTER_MODE) {
@@ -127,7 +134,7 @@ static int pcm5122_config_codec(struct i2c_client *dev,
 	return 0;
 }
 
-int pcm5122_codec_init(int mode, int sampling_freq)
+int pcm5122_codec_init(int mode, int sampling_freq, bool enable_low_latency)
 {
 	struct i2c_client *client = NULL;
 	struct i2c_adapter *adapter = NULL;
@@ -143,7 +150,7 @@ int pcm5122_codec_init(int mode, int sampling_freq)
 		return -1;
 	}
 
-	if (pcm5122_config_codec(client, mode, sampling_freq)) {
+	if (pcm5122_config_codec(client, mode, sampling_freq, enable_low_latency)) {
 		printk(KERN_ERR "pcm5122-elk: config_codec failed\n");
 		return -1;
 	}
