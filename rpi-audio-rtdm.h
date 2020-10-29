@@ -36,6 +36,12 @@ enum codec_sample_format {
 	INT32_RJ
 };
 
+enum platform_type {
+	NATIVE_AUDIO = 1,
+	SYNC_WITH_UC_AUDIO,
+	ASYNC_WITH_UC_AUDIO,
+};
+
 struct audio_rtdm_buffers {
 	uint32_t 	 	*cv_gate_out;
 	uint32_t 	 	*cv_gate_in;

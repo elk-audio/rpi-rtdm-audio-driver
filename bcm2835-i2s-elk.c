@@ -18,6 +18,7 @@
 #include <linux/clk.h>
 
 #include "pcm3168a-elk.h"
+#include "rpi-audio-rtdm.h"
 #include "bcm2835-i2s-elk.h"
 #include "elk-pi-config.h"
 #include "hifi-berry-config.h"

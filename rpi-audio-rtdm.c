@@ -15,7 +15,7 @@
 #include <rtdm/driver.h>
 #include <rtdm/rtdm.h>
 
-#include "audio-rtdm.h"
+#include "rpi-audio-rtdm.h"
 #include "elk-pi-config.h"
 #include "hifi-berry-config.h"
 #include "hifi-berry-pro-config.h"
@@ -35,6 +35,7 @@ MODULE_LICENSE("GPL");
 #define DEFAULT_AUDIO_N_FRAMES_PER_BUFFER		64
 #define DEFAULT_AUDIO_CODEC_FORMAT			INT24_LJ
 #define DEFAULT_AUDIO_LOW_LATENCY_VAL			1
+#define PLATFORM_TYPE					NATIVE_AUDIO
 
 static uint audio_ver_maj = AUDIO_RTDM_VERSION_MAJ;
 module_param(audio_ver_maj, uint, 0644);
@@ -59,6 +60,9 @@ module_param(audio_sampling_rate, uint, 0444);
 
 static uint audio_format = DEFAULT_AUDIO_CODEC_FORMAT;
 module_param(audio_format, uint, 0444);
+
+static uint platform_type = PLATFORM_TYPE;
+module_param(platform_type, uint, 0444);
 
 static char *audio_hat = "elk-pi";
 module_param(audio_hat, charp, 0644);

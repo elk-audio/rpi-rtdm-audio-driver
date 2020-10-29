@@ -11,8 +11,6 @@
 #include <linux/err.h>
 #include <linux/sizes.h>
 
-#include "audio-rtdm.h"
-
 #define BCM2835_I2S_IRQ_NUM 85
 
 #define BCM2835_I2S_PERIPHERAL_BASE	0x20203000
