@@ -10,6 +10,10 @@
 #include <linux/delay.h>
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
+#include <linux/err.h>
+#include <linux/sysfs.h>
+#include <linux/uaccess.h>
+#include <linux/device.h>
 
 /* RTDM headers */
 #include <rtdm/driver.h>
@@ -74,6 +78,20 @@ struct audio_dev_context {
 	struct audio_rtdm_dev *i2s_dev;
 	uint64_t user_proc_calls;
 };
+
+static ssize_t audio_buffer_show(struct class *cls, struct class_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", audio_buffer_size);
+}
+
+static ssize_t audio_hat_show(struct class *cls, struct class_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%s\n", audio_hat);
+}
+
+static struct class *audio_rtdm_class;
+static CLASS_ATTR_RO(audio_buffer);
+static CLASS_ATTR_RO(audio_hat);
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags)
 {
@@ -191,6 +209,24 @@ static struct rtdm_device rtdm_audio_device = {
 int audio_rtdm_init(void)
 {
 	int ret, num_codec_channels = DEFAULT_AUDIO_NUM_CODEC_CHANNELS;
+
+	audio_rtdm_class = class_create(THIS_MODULE, "audio_rtdm");
+	if (IS_ERR(audio_rtdm_class)) {
+		ret = PTR_ERR(audio_rtdm_class);
+		return ret;
+	}
+	ret = class_create_file(audio_rtdm_class,
+				 &class_attr_audio_buffer);
+	if (ret) {
+		printk(KERN_ERR "audio_rtdm: can't create sysfs file\n");
+		return ret;
+	}
+	ret = class_create_file(audio_rtdm_class,
+				 &class_attr_audio_hat);
+	if (ret) {
+		printk(KERN_ERR "audio_rtdm: can't create sysfs file\n");
+		return ret;
+	}
 
 	if (!realtime_core_enabled()) {
 		printk(KERN_ERR "audio_rtdm: rt core not enabled\n");
