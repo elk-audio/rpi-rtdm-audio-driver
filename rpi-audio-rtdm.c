@@ -79,7 +79,7 @@ struct audio_dev_context {
 	uint64_t user_proc_calls;
 };
 
-static ssize_t audio_buffer_show(struct class *cls, struct class_attribute *attr, char *buf)
+static ssize_t audio_buffer_size_show(struct class *cls, struct class_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%d\n", audio_buffer_size);
 }
@@ -90,7 +90,7 @@ static ssize_t audio_hat_show(struct class *cls, struct class_attribute *attr, c
 }
 
 static struct class *audio_rtdm_class;
-static CLASS_ATTR_RO(audio_buffer);
+static CLASS_ATTR_RO(audio_buffer_size);
 static CLASS_ATTR_RO(audio_hat);
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags)
@@ -216,7 +216,7 @@ int audio_rtdm_init(void)
 		return ret;
 	}
 	ret = class_create_file(audio_rtdm_class,
-				 &class_attr_audio_buffer);
+				 &class_attr_audio_buffer_size);
 	if (ret) {
 		printk(KERN_ERR "audio_rtdm: can't create sysfs file\n");
 		return ret;
