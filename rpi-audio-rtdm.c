@@ -89,9 +89,15 @@ static ssize_t audio_hat_show(struct class *cls, struct class_attribute *attr, c
 	return sprintf(buf, "%s\n", audio_hat);
 }
 
+static ssize_t audio_sampling_rate_show(struct class *cls, struct class_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%s\n", audio_sampling_rate);
+}
+
 static struct class *audio_rtdm_class;
 static CLASS_ATTR_RO(audio_buffer_size);
 static CLASS_ATTR_RO(audio_hat);
+static CLASS_ATTR_RO(audio_sampling_rate);
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags)
 {
@@ -223,6 +229,12 @@ int audio_rtdm_init(void)
 	}
 	ret = class_create_file(audio_rtdm_class,
 				 &class_attr_audio_hat);
+	if (ret) {
+		printk(KERN_ERR "audio_rtdm: can't create sysfs file\n");
+		return ret;
+	}
+	ret = class_create_file(audio_rtdm_class,
+				 &class_attr_audio_sampling_rate);
 	if (ret) {
 		printk(KERN_ERR "audio_rtdm: can't create sysfs file\n");
 		return ret;
