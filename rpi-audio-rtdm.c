@@ -91,7 +91,7 @@ static ssize_t audio_hat_show(struct class *cls, struct class_attribute *attr, c
 
 static ssize_t audio_sampling_rate_show(struct class *cls, struct class_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%s\n", audio_sampling_rate);
+	return sprintf(buf, "%d\n", audio_sampling_rate);
 }
 
 static struct class *audio_rtdm_class;
