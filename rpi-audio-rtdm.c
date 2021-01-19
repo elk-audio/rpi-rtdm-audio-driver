@@ -94,10 +94,22 @@ static ssize_t audio_sampling_rate_show(struct class *cls, struct class_attribut
 	return sprintf(buf, "%d\n", audio_sampling_rate);
 }
 
-static struct class *audio_rtdm_class;
 static CLASS_ATTR_RO(audio_buffer_size);
 static CLASS_ATTR_RO(audio_hat);
 static CLASS_ATTR_RO(audio_sampling_rate);
+
+static struct attribute *audio_rtdm_class_attrs[] = {
+	&class_attr_audio_buffer_size.attr,
+	&class_attr_audio_hat.attr,
+	&class_attr_audio_sampling_rate.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(audio_rtdm_class);
+
+struct class audio_rtdm_class = {
+	.name        = "audio_rtdm",
+	.class_groups = audio_rtdm_class_groups,
+};
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags)
 {
@@ -216,29 +228,9 @@ int audio_rtdm_init(void)
 {
 	int ret, num_codec_channels = DEFAULT_AUDIO_NUM_CODEC_CHANNELS;
 
-	audio_rtdm_class = class_create(THIS_MODULE, "audio_rtdm");
-	if (IS_ERR(audio_rtdm_class)) {
-		ret = PTR_ERR(audio_rtdm_class);
+	ret = class_register(&audio_rtdm_class);
+	if (ret < 0)
 		return ret;
-	}
-	ret = class_create_file(audio_rtdm_class,
-				 &class_attr_audio_buffer_size);
-	if (ret) {
-		printk(KERN_ERR "audio_rtdm: can't create sysfs file\n");
-		return ret;
-	}
-	ret = class_create_file(audio_rtdm_class,
-				 &class_attr_audio_hat);
-	if (ret) {
-		printk(KERN_ERR "audio_rtdm: can't create sysfs file\n");
-		return ret;
-	}
-	ret = class_create_file(audio_rtdm_class,
-				 &class_attr_audio_sampling_rate);
-	if (ret) {
-		printk(KERN_ERR "audio_rtdm: can't create sysfs file\n");
-		return ret;
-	}
 
 	if (!realtime_core_enabled()) {
 		printk(KERN_ERR "audio_rtdm: rt core not enabled\n");
@@ -314,6 +306,7 @@ void audio_rtdm_exit(void)
 		pcm3168a_codec_exit();
 	}
 	bcm2835_i2s_exit();
+	class_unregister(&audio_rtdm_class);
 	rtdm_dev_unregister(&rtdm_audio_device);
 }
 

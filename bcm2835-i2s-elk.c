@@ -16,6 +16,7 @@
 #include <asm/io.h>
 #include <linux/gpio.h>
 #include <linux/clk.h>
+#include <linux/dma/bcm2835-dma.h>
 
 #include "pcm3168a-elk.h"
 #include "rpi-audio-rtdm.h"
@@ -243,22 +244,25 @@ static int bcm2835_i2s_dma_setup(struct audio_rtdm_dev *audio_dev)
 	if (!audio_dev->dma_tx) {
 		return -ENODEV;
 	}
+	if (bcm2835_dma_alloc_rtdm_resources(audio_dev->dma_tx,
+		DMA_MEM_TO_DEV)) {
+		printk(KERN_INFO "Failed to allocate RTDM \
+		resources for dma tx\n");
+		return -1;
+	}
 
-	audio_dev->dma_tx->private = "rtdm-tx-irq";
-
-	/* Note: This dmaengine_resume is a way to enter the dma backend
-	and get rtdm irqs. The above initialized string is used as an
-	identifier to recognize which channels need to be real-time safe */
-
-	dmaengine_resume(audio_dev->dma_tx);
 	audio_dev->dma_rx = dma_request_slave_channel(dev, "rx");
 	if (!audio_dev->dma_rx) {
 		dma_release_channel(audio_dev->dma_tx);
 		audio_dev->dma_tx = NULL;
 		return -ENODEV;
 	}
-	audio_dev->dma_rx->private = "rtdm-rx-irq";
-	dmaengine_resume(audio_dev->dma_rx);
+	if (bcm2835_dma_alloc_rtdm_resources(audio_dev->dma_rx,
+		DMA_DEV_TO_MEM)) {
+		printk(KERN_INFO "Failed to allocate RTDM \
+		resources for dma rx\n");
+		return -1;
+	}
 	printk(KERN_INFO "bcm2835-i2s: dma setup successful.\n");
 	return 0;
 }
@@ -490,6 +494,14 @@ int bcm2835_i2s_exit(void)
 		printk(KERN_ERR "bcm2835-i2s: dmaengine_terminate_async \
 		 failed\n");
 		return ret;
+	}
+	if (bcm2835_dma_free_rtdm_resources(audio_dev->dma_tx,
+				DMA_MEM_TO_DEV)) {
+		printk(KERN_INFO "Failed to free rtdm dma resources\n");
+	}
+	if (bcm2835_dma_free_rtdm_resources(audio_dev->dma_rx,
+				DMA_DEV_TO_MEM)) {
+		printk(KERN_INFO "Failed to free rtdm dma resources\n");
 	}
 	dma_free_coherent(audio_dev->dma_rx->device->dev,
 				RESERVED_BUFFER_SIZE_IN_PAGES * PAGE_SIZE,
