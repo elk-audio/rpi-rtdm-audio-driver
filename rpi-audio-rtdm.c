@@ -84,6 +84,18 @@ static ssize_t audio_buffer_size_show(struct class *cls, struct class_attribute 
 	return sprintf(buf, "%d\n", audio_buffer_size);
 }
 
+static ssize_t audio_buffer_size_store(struct class *class,
+		struct class_attribute *attr, const char *buf, size_t size)
+{
+	unsigned long bs;
+	ssize_t result;
+	result = sscanf(buf, "%lu", &bs);
+	if (result != 1)
+		return -EINVAL;
+	audio_buffer_size = bs;
+	return size;
+}
+
 static ssize_t audio_hat_show(struct class *cls, struct class_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%s\n", audio_hat);
@@ -94,7 +106,7 @@ static ssize_t audio_sampling_rate_show(struct class *cls, struct class_attribut
 	return sprintf(buf, "%d\n", audio_sampling_rate);
 }
 
-static CLASS_ATTR_RO(audio_buffer_size);
+static CLASS_ATTR_RW(audio_buffer_size);
 static CLASS_ATTR_RO(audio_hat);
 static CLASS_ATTR_RO(audio_sampling_rate);
 
@@ -119,7 +131,10 @@ static int audio_driver_open(struct rtdm_fd *fd, int oflags)
 	dev_context->i2s_dev = bcm2835_get_i2s_dev();
 	dev_context->i2s_dev->wait_flag = 0;
 	dev_context->user_proc_calls = 0;
+	dev_context->i2s_dev->kinterrupts = 0;
+	dev_context->i2s_dev->buffer_idx = 0;
 	rtdm_event_init(&dev_context->i2s_dev->irq_event, 0);
+	bcm2835_i2s_buffers_setup(audio_buffer_size, audio_output_channels);
 	return 0;
 }
 
@@ -139,6 +154,7 @@ static void audio_driver_close(struct rtdm_fd *fd)
 		}
 		dev_context->i2s_dev->wait_flag = 0;
 	}
+	bcm2835_i2s_exit();
 }
 
 static int audio_driver_mmap_nrt(struct rtdm_fd *fd, struct vm_area_struct *vma)
@@ -178,13 +194,13 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 
 	case AUDIO_PROC_START:
 	{
-		dev->wait_flag = 1;
+		bcm2835_i2s_start_stop(dev, BCM2835_I2S_START_CMD);
 		return 0;
 	}
 
 	case AUDIO_PROC_STOP:
 	{
-		dev->wait_flag = 0;
+		bcm2835_i2s_start_stop(dev, BCM2835_I2S_STOP_CMD);
 		return 0;
 	}
 
@@ -236,7 +252,7 @@ int audio_rtdm_init(void)
 		printk(KERN_ERR "audio_rtdm: rt core not enabled\n");
 		return -ENODEV;
 	}
-	msleep(100);
+
 	if (!strcmp(audio_hat, "hifi-berry")) {
 		printk(KERN_INFO "audio_rtdm: hifi-berry hat\n");
 		if (pcm5122_codec_init(HIFI_BERRY_DAC_MODE,
@@ -281,8 +297,8 @@ int audio_rtdm_init(void)
 	} else {
 		printk(KERN_ERR "audio_rtdm: Unsupported hat\n");
 	}
-	msleep(100);
-	if (bcm2835_i2s_init(audio_buffer_size, num_codec_channels, audio_hat)) {
+
+	if (bcm2835_i2s_init(audio_hat)) {
 		printk(KERN_ERR "audio_rtdm: i2s init failed\n");
 		return -1;
 	}
@@ -305,7 +321,6 @@ void audio_rtdm_exit(void)
 	} else if (!strcmp(audio_hat, "elk-pi")) {
 		pcm3168a_codec_exit();
 	}
-	bcm2835_i2s_exit();
 	class_unregister(&audio_rtdm_class);
 	rtdm_dev_unregister(&rtdm_audio_device);
 }

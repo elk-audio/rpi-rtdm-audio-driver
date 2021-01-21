@@ -28,7 +28,7 @@
 #define BCM2835_PCM_WORD_LEN 	32
 #define BCM2835_PCM_SLOTS	2
 
-static struct audio_rtdm_dev *audio_static_dev;
+static struct audio_rtdm_dev *audio_dev_static;
 
 #ifdef BCM2835_I2S_CVGATES_SUPPORT
 static int cv_gate_out[NUM_OF_CVGATE_OUTS] = { CVGATE_OUTS_LIST };
@@ -127,6 +127,7 @@ void bcm2835_i2s_start_stop(struct audio_rtdm_dev *audio_dev, int cmd)
 			BCM2835_I2S_CS_A_REG, mask, 0);
 	}
 }
+EXPORT_SYMBOL_GPL(bcm2835_i2s_start_stop);
 
 static void bcm2835_i2s_dma_callback(void *data)
 {
@@ -136,23 +137,22 @@ static void bcm2835_i2s_dma_callback(void *data)
 
 	audio_dev->kinterrupts++;
 	audio_dev->buffer_idx = ~(audio_dev->buffer_idx) & 0x1;
-	if (audio_dev->wait_flag) {
-		rtdm_event_signal(&audio_dev->irq_event);
+
+	rtdm_event_signal(&audio_dev->irq_event);
 #ifdef BCM2835_I2S_CVGATES_SUPPORT
-		if (audio_dev->cv_gate_enabled) {
-			for (i = 0; i < NUM_OF_CVGATE_OUTS; i++) {
-				val = (unsigned long) *audio_dev->buffer->cv_gate_out &
-				BIT(i);
-				gpio_set_value(cv_gate_out[i], val);
-			}
-			val = 0;
-			for (i = 0; i < NUM_OF_CVGATE_INS; i++) {
-			val |= gpio_get_value(cv_gate_in[i]) << i;
-			}
-			*audio_dev->buffer->cv_gate_in = val;
+	if (audio_dev->cv_gate_enabled) {
+		for (i = 0; i < NUM_OF_CVGATE_OUTS; i++) {
+			val = (unsigned long) *audio_dev->buffer->cv_gate_out &
+			BIT(i);
+			gpio_set_value(cv_gate_out[i], val);
 		}
-#endif
+		val = 0;
+		for (i = 0; i < NUM_OF_CVGATE_INS; i++) {
+		val |= gpio_get_value(cv_gate_in[i]) << i;
+		}
+		*audio_dev->buffer->cv_gate_in = val;
 	}
+#endif
 }
 
 static struct dma_async_tx_descriptor *
@@ -414,12 +414,10 @@ static void bcm2835_i2s_clear_regs(struct audio_rtdm_dev *audio_dev)
 	rpi_reg_write(audio_dev->i2s_base_addr, BCM2835_I2S_GRAY_REG, 0);
 }
 
-int bcm2835_i2s_init(int audio_buffer_size, int audio_channels,
-			char *audio_hat)
+int bcm2835_i2s_init(char *audio_hat)
 {
-	int ret, i;
 	dma_addr_t dummy_phys_addr;
-	struct audio_rtdm_dev *audio_dev = audio_static_dev;
+	struct audio_rtdm_dev *audio_dev = audio_dev_static;
 	struct audio_rtdm_buffers *audio_buffer = audio_dev->buffer;
 	audio_dev->audio_hat = audio_hat;
 
@@ -434,6 +432,22 @@ int bcm2835_i2s_init(int audio_buffer_size, int audio_channels,
 		return -ENOMEM;
 	}
 	audio_buffer->rx_phys_addr = dummy_phys_addr;
+
+	if (!strcmp(audio_dev->audio_hat, "elk-pi")) {
+		audio_dev->cv_gate_enabled = true;
+		bcm2835_init_cv_gates();
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(bcm2835_i2s_init);
+
+int bcm2835_i2s_buffers_setup(int audio_buffer_size, int audio_channels)
+{
+	int ret, i;
+	struct audio_rtdm_dev *audio_dev = audio_dev_static;
+	struct audio_rtdm_buffers *audio_buffer = audio_dev->buffer;
+	dma_addr_t dummy_phys_addr = audio_buffer->rx_phys_addr;
+
 	audio_buffer->period_len = audio_buffer_size * audio_channels
 					 * sizeof(uint32_t);
 	audio_buffer->buffer_len = 2 * audio_buffer->period_len;
@@ -452,37 +466,31 @@ int bcm2835_i2s_init(int audio_buffer_size, int audio_channels,
 		return -EINVAL;
 	}
 
-	if (!strcmp(audio_dev->audio_hat, "elk-pi")) {
-		audio_dev->cv_gate_enabled = true;
-		bcm2835_init_cv_gates();
-	}
 	bcm2835_i2s_clear_regs(audio_dev);
 	bcm2835_i2s_configure(audio_dev);
 	bcm2835_i2s_enable(audio_dev);
-
 	bcm2835_i2s_clear_fifos(audio_dev, true, true);
 
 	for (i = 0; i < (BCM2835_DMA_THR_TX + audio_channels); i++)
 		rpi_reg_write(audio_dev->i2s_base_addr, BCM2835_I2S_FIFO_A_REG, 0);
 
 	bcm2835_i2s_submit_dma(audio_dev);
-	msleep(10);
-	bcm2835_i2s_start_stop(audio_dev, BCM2835_I2S_START_CMD);
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(bcm2835_i2s_init);
+EXPORT_SYMBOL_GPL(bcm2835_i2s_buffers_setup);
 
 struct audio_rtdm_dev *bcm2835_get_i2s_dev(void)
 {
-	return audio_static_dev;
+	return audio_dev_static;
 }
 EXPORT_SYMBOL_GPL(bcm2835_get_i2s_dev);
 
 int bcm2835_i2s_exit(void)
 {
 	int ret = 0;
-	struct audio_rtdm_dev *audio_dev = audio_static_dev;
+	struct audio_rtdm_dev *audio_dev = audio_dev_static;
+
 	ret = dmaengine_terminate_async(audio_dev->dma_tx);
 	if (ret < 0) {
 		printk(KERN_ERR "bcm2835-i2s: dmaengine_terminate_async \
@@ -495,25 +503,11 @@ int bcm2835_i2s_exit(void)
 		 failed\n");
 		return ret;
 	}
-	if (bcm2835_dma_free_rtdm_resources(audio_dev->dma_tx,
-				DMA_MEM_TO_DEV)) {
-		printk(KERN_INFO "Failed to free rtdm dma resources\n");
-	}
-	if (bcm2835_dma_free_rtdm_resources(audio_dev->dma_rx,
-				DMA_DEV_TO_MEM)) {
-		printk(KERN_INFO "Failed to free rtdm dma resources\n");
-	}
-	dma_free_coherent(audio_dev->dma_rx->device->dev,
-				RESERVED_BUFFER_SIZE_IN_PAGES * PAGE_SIZE,
-				audio_dev->buffer->rx_buf,
-				audio_dev->buffer->rx_phys_addr);
-	dma_release_channel(audio_dev->dma_tx);
-	dma_release_channel(audio_dev->dma_rx);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(bcm2835_i2s_exit);
 
-int bcm2835_i2s_probe(struct platform_device *pdev)
+static int bcm2835_i2s_probe(struct platform_device *pdev)
 {
 	struct audio_rtdm_dev *audio_dev;
 	int ret = 0;
@@ -535,7 +529,7 @@ int bcm2835_i2s_probe(struct platform_device *pdev)
 		return PTR_ERR(audio_dev->clk);
 	}
 
-	audio_static_dev = audio_dev;
+	audio_dev_static = audio_dev;
 
 	mem_resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	base = devm_ioremap_resource(&pdev->dev, mem_resource);
@@ -574,18 +568,32 @@ int bcm2835_i2s_probe(struct platform_device *pdev)
 
 static int bcm2835_i2s_remove(struct platform_device *pdev)
 {
+	struct audio_rtdm_dev *audio_dev = audio_dev_static;
 	struct audio_rtdm_buffers *audio_buffers =
-					audio_static_dev->buffer;
+					audio_dev_static->buffer;
 
-	bcm2835_i2s_start_stop(audio_static_dev, BCM2835_I2S_STOP_CMD);
+	if (bcm2835_dma_free_rtdm_resources(audio_dev->dma_tx,
+				DMA_MEM_TO_DEV)) {
+		printk(KERN_INFO "Failed to free rtdm dma resources\n");
+	}
+	if (bcm2835_dma_free_rtdm_resources(audio_dev->dma_rx,
+				DMA_DEV_TO_MEM)) {
+		printk(KERN_INFO "Failed to free rtdm dma resources\n");
+	}
+	dma_free_coherent(audio_dev->dma_rx->device->dev,
+				RESERVED_BUFFER_SIZE_IN_PAGES * PAGE_SIZE,
+				audio_dev->buffer->rx_buf,
+				audio_dev->buffer->rx_phys_addr);
+	dma_release_channel(audio_dev->dma_tx);
+	dma_release_channel(audio_dev->dma_rx);
 	kfree(audio_buffers);
 
 #ifdef BCM2835_I2S_CVGATES_SUPPORT
-	if (audio_static_dev->cv_gate_enabled)
+	if (audio_dev_static->cv_gate_enabled)
 		bcm2835_free_cv_gates();
 #endif
-	devm_iounmap(&pdev->dev, (void *)audio_static_dev->i2s_base_addr);
-	devm_kfree(&pdev->dev, (void *)audio_static_dev);
+	devm_iounmap(&pdev->dev, (void *)audio_dev_static->i2s_base_addr);
+	devm_kfree(&pdev->dev, (void *)audio_dev_static);
 	return 0;
 }
 
