@@ -40,48 +40,33 @@ MODULE_LICENSE("GPL");
 #define DEFAULT_AUDIO_CODEC_FORMAT			INT24_LJ
 #define DEFAULT_AUDIO_LOW_LATENCY_VAL			1
 #define PLATFORM_TYPE					NATIVE_AUDIO
+#define SUPPORTED_BUFFER_SIZES 16, 32, 64, 128
 
-static uint audio_ver_maj = AUDIO_RTDM_VERSION_MAJ;
-module_param(audio_ver_maj, uint, 0644);
-
-static uint audio_ver_min = AUDIO_RTDM_VERSION_MIN;
-module_param(audio_ver_min, uint, 0644);
-
-static uint audio_ver_rev = AUDIO_RTDM_VERSION_VER;
-module_param(audio_ver_rev, uint, 0644);
+static uint audio_rtdm_ver_maj = AUDIO_RTDM_VERSION_MAJ;
+static uint audio_rtdm_ver_min = AUDIO_RTDM_VERSION_MIN;
+static uint audio_rtdm_ver_rev = AUDIO_RTDM_VERSION_VER;
+static uint audio_input_channels = DEFAULT_AUDIO_NUM_INPUT_CHANNELS;
+static uint audio_output_channels = DEFAULT_AUDIO_NUM_OUTPUT_CHANNELS;
+static uint audio_sampling_rate = DEFAULT_AUDIO_SAMPLING_RATE;
+static uint audio_format = DEFAULT_AUDIO_CODEC_FORMAT;
+static uint platform_type = PLATFORM_TYPE;
 
 static uint audio_buffer_size = DEFAULT_AUDIO_N_FRAMES_PER_BUFFER;
 module_param(audio_buffer_size, uint, 0644);
-
-static uint audio_input_channels = DEFAULT_AUDIO_NUM_INPUT_CHANNELS;
-module_param(audio_input_channels, uint, 0444);
-
-static uint audio_output_channels = DEFAULT_AUDIO_NUM_OUTPUT_CHANNELS;
-module_param(audio_output_channels, uint, 0444);
-
-static uint audio_sampling_rate = DEFAULT_AUDIO_SAMPLING_RATE;
-module_param(audio_sampling_rate, uint, 0444);
-
-static uint audio_format = DEFAULT_AUDIO_CODEC_FORMAT;
-module_param(audio_format, uint, 0444);
-
-static uint platform_type = PLATFORM_TYPE;
-module_param(platform_type, uint, 0444);
-
 static char *audio_hat = "elk-pi";
 module_param(audio_hat, charp, 0644);
-
 static uint audio_enable_low_latency = DEFAULT_AUDIO_LOW_LATENCY_VAL;
 module_param(audio_enable_low_latency, uint, 0644);
+static const int supported_buffer_sizes[] = {SUPPORTED_BUFFER_SIZES};
 
 struct audio_dev_context {
 	struct audio_rtdm_dev *i2s_dev;
 	uint64_t user_proc_calls;
 };
 
-static ssize_t audio_buffer_size_show(struct class *cls, struct class_attribute *attr, char *buf)
-{
-	return sprintf(buf, "%d\n", audio_buffer_size);
+static ssize_t audio_buffer_size_show(struct class *cls,
+                                      struct class_attribute *attr, char *buf) {
+  return sprintf(buf, "%d\n", audio_buffer_size);
 }
 
 static ssize_t audio_buffer_size_store(struct class *class,
@@ -96,31 +81,86 @@ static ssize_t audio_buffer_size_store(struct class *class,
 	return size;
 }
 
-static ssize_t audio_hat_show(struct class *cls, struct class_attribute *attr, char *buf)
-{
-	return sprintf(buf, "%s\n", audio_hat);
+static ssize_t audio_hat_show(struct class *cls, struct class_attribute *attr,
+                              char *buf) {
+  return sprintf(buf, "%s\n", audio_hat);
 }
 
-static ssize_t audio_sampling_rate_show(struct class *cls, struct class_attribute *attr, char *buf)
-{
-	return sprintf(buf, "%d\n", audio_sampling_rate);
+static ssize_t audio_sampling_rate_show(struct class *cls,
+                                        struct class_attribute *attr,
+                                        char *buf) {
+  return sprintf(buf, "%lu\n", audio_sampling_rate);
+}
+
+static ssize_t audio_rtdm_ver_maj_show(struct class *cls,
+                                       struct class_attribute *attr,
+                                       char *buf) {
+  return sprintf(buf, "%d\n", audio_rtdm_ver_maj);
+}
+
+static ssize_t audio_rtdm_ver_min_show(struct class *cls,
+                                       struct class_attribute *attr,
+                                       char *buf) {
+  return sprintf(buf, "%d\n", audio_rtdm_ver_min);
+}
+
+static ssize_t audio_rtdm_ver_rev_show(struct class *cls,
+                                       struct class_attribute *attr,
+                                       char *buf) {
+  return sprintf(buf, "%d\n", audio_rtdm_ver_rev);
+}
+
+static ssize_t audio_input_channels_show(struct class *cls,
+                                         struct class_attribute *attr,
+                                         char *buf) {
+  return sprintf(buf, "%d\n", audio_input_channels);
+}
+
+static ssize_t audio_output_channels_show(struct class *cls,
+                                          struct class_attribute *attr,
+                                          char *buf) {
+  return sprintf(buf, "%d\n", audio_output_channels);
+}
+
+static ssize_t audio_format_show(struct class *cls,
+                                 struct class_attribute *attr, char *buf) {
+  return sprintf(buf, "%d\n", audio_format);
+}
+
+static ssize_t platform_type_show(struct class *cls,
+                                  struct class_attribute *attr, char *buf) {
+  return sprintf(buf, "%d\n", platform_type);
 }
 
 static CLASS_ATTR_RW(audio_buffer_size);
 static CLASS_ATTR_RO(audio_hat);
 static CLASS_ATTR_RO(audio_sampling_rate);
+static CLASS_ATTR_RO(audio_rtdm_ver_maj);
+static CLASS_ATTR_RO(audio_rtdm_ver_min);
+static CLASS_ATTR_RO(audio_rtdm_ver_rev);
+static CLASS_ATTR_RO(audio_input_channels);
+static CLASS_ATTR_RO(audio_output_channels);
+static CLASS_ATTR_RO(audio_format);
+static CLASS_ATTR_RO(platform_type);
 
 static struct attribute *audio_rtdm_class_attrs[] = {
 	&class_attr_audio_buffer_size.attr,
 	&class_attr_audio_hat.attr,
 	&class_attr_audio_sampling_rate.attr,
+	&class_attr_audio_rtdm_ver_maj.attr,
+	&class_attr_audio_rtdm_ver_min.attr,
+	&class_attr_audio_rtdm_ver_rev.attr,
+	&class_attr_audio_input_channels.attr,
+	&class_attr_audio_output_channels.attr,
+	&class_attr_audio_format.attr,
+	&class_attr_platform_type.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(audio_rtdm_class);
 
 struct class audio_rtdm_class = {
-	.name        = "audio_rtdm",
-	.class_groups = audio_rtdm_class_groups,
+    .name = "audio_rtdm",
+    .class_groups = audio_rtdm_class_groups,
 };
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags)
