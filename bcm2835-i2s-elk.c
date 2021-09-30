@@ -423,7 +423,7 @@ int bcm2835_i2s_init(char *audio_hat)
 
 	printk(KERN_INFO "Elk hat: %s\n", audio_dev->audio_hat);
 
-	audio_buffer->rx_buf = dma_zalloc_coherent(audio_dev->dma_rx->device->dev,
+	audio_buffer->rx_buf = dma_alloc_coherent(audio_dev->dma_rx->device->dev,
 	RESERVED_BUFFER_SIZE_IN_PAGES * PAGE_SIZE,
 	&dummy_phys_addr,
 	GFP_KERNEL);
