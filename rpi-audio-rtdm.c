@@ -10,6 +10,10 @@
 #include <linux/delay.h>
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
+#include <linux/err.h>
+#include <linux/sysfs.h>
+#include <linux/uaccess.h>
+#include <linux/device.h>
 
 /* RTDM headers */
 #include <rtdm/driver.h>
@@ -36,43 +40,127 @@ MODULE_LICENSE("GPL");
 #define DEFAULT_AUDIO_CODEC_FORMAT			INT24_LJ
 #define DEFAULT_AUDIO_LOW_LATENCY_VAL			1
 #define PLATFORM_TYPE					NATIVE_AUDIO
+#define SUPPORTED_BUFFER_SIZES 16, 32, 64, 128
 
-static uint audio_ver_maj = AUDIO_RTDM_VERSION_MAJ;
-module_param(audio_ver_maj, uint, 0644);
-
-static uint audio_ver_min = AUDIO_RTDM_VERSION_MIN;
-module_param(audio_ver_min, uint, 0644);
-
-static uint audio_ver_rev = AUDIO_RTDM_VERSION_VER;
-module_param(audio_ver_rev, uint, 0644);
+static uint audio_rtdm_ver_maj = AUDIO_RTDM_VERSION_MAJ;
+static uint audio_rtdm_ver_min = AUDIO_RTDM_VERSION_MIN;
+static uint audio_rtdm_ver_rev = AUDIO_RTDM_VERSION_VER;
+static uint audio_input_channels = DEFAULT_AUDIO_NUM_INPUT_CHANNELS;
+static uint audio_output_channels = DEFAULT_AUDIO_NUM_OUTPUT_CHANNELS;
+static uint audio_sampling_rate = DEFAULT_AUDIO_SAMPLING_RATE;
+static uint audio_format = DEFAULT_AUDIO_CODEC_FORMAT;
+static uint platform_type = PLATFORM_TYPE;
 
 static uint audio_buffer_size = DEFAULT_AUDIO_N_FRAMES_PER_BUFFER;
 module_param(audio_buffer_size, uint, 0644);
-
-static uint audio_input_channels = DEFAULT_AUDIO_NUM_INPUT_CHANNELS;
-module_param(audio_input_channels, uint, 0444);
-
-static uint audio_output_channels = DEFAULT_AUDIO_NUM_OUTPUT_CHANNELS;
-module_param(audio_output_channels, uint, 0444);
-
-static uint audio_sampling_rate = DEFAULT_AUDIO_SAMPLING_RATE;
-module_param(audio_sampling_rate, uint, 0444);
-
-static uint audio_format = DEFAULT_AUDIO_CODEC_FORMAT;
-module_param(audio_format, uint, 0444);
-
-static uint platform_type = PLATFORM_TYPE;
-module_param(platform_type, uint, 0444);
-
 static char *audio_hat = "elk-pi";
 module_param(audio_hat, charp, 0644);
-
 static uint audio_enable_low_latency = DEFAULT_AUDIO_LOW_LATENCY_VAL;
 module_param(audio_enable_low_latency, uint, 0644);
+static const int supported_buffer_sizes[] = {SUPPORTED_BUFFER_SIZES};
 
 struct audio_dev_context {
 	struct audio_rtdm_dev *i2s_dev;
 	uint64_t user_proc_calls;
+};
+
+static ssize_t audio_buffer_size_show(struct class *cls,
+                                      struct class_attribute *attr, char *buf) {
+  return sprintf(buf, "%d\n", audio_buffer_size);
+}
+
+static ssize_t audio_buffer_size_store(struct class *class,
+		struct class_attribute *attr, const char *buf, size_t size)
+{
+	unsigned long bs;
+	ssize_t result;
+	result = sscanf(buf, "%lu", &bs);
+	if (result != 1)
+		return -EINVAL;
+	audio_buffer_size = bs;
+	return size;
+}
+
+static ssize_t audio_hat_show(struct class *cls, struct class_attribute *attr,
+                              char *buf) {
+  return sprintf(buf, "%s\n", audio_hat);
+}
+
+static ssize_t audio_sampling_rate_show(struct class *cls,
+                                        struct class_attribute *attr,
+                                        char *buf) {
+  return sprintf(buf, "%lu\n", audio_sampling_rate);
+}
+
+static ssize_t audio_rtdm_ver_maj_show(struct class *cls,
+                                       struct class_attribute *attr,
+                                       char *buf) {
+  return sprintf(buf, "%d\n", audio_rtdm_ver_maj);
+}
+
+static ssize_t audio_rtdm_ver_min_show(struct class *cls,
+                                       struct class_attribute *attr,
+                                       char *buf) {
+  return sprintf(buf, "%d\n", audio_rtdm_ver_min);
+}
+
+static ssize_t audio_rtdm_ver_rev_show(struct class *cls,
+                                       struct class_attribute *attr,
+                                       char *buf) {
+  return sprintf(buf, "%d\n", audio_rtdm_ver_rev);
+}
+
+static ssize_t audio_input_channels_show(struct class *cls,
+                                         struct class_attribute *attr,
+                                         char *buf) {
+  return sprintf(buf, "%d\n", audio_input_channels);
+}
+
+static ssize_t audio_output_channels_show(struct class *cls,
+                                          struct class_attribute *attr,
+                                          char *buf) {
+  return sprintf(buf, "%d\n", audio_output_channels);
+}
+
+static ssize_t audio_format_show(struct class *cls,
+                                 struct class_attribute *attr, char *buf) {
+  return sprintf(buf, "%d\n", audio_format);
+}
+
+static ssize_t platform_type_show(struct class *cls,
+                                  struct class_attribute *attr, char *buf) {
+  return sprintf(buf, "%d\n", platform_type);
+}
+
+static CLASS_ATTR_RW(audio_buffer_size);
+static CLASS_ATTR_RO(audio_hat);
+static CLASS_ATTR_RO(audio_sampling_rate);
+static CLASS_ATTR_RO(audio_rtdm_ver_maj);
+static CLASS_ATTR_RO(audio_rtdm_ver_min);
+static CLASS_ATTR_RO(audio_rtdm_ver_rev);
+static CLASS_ATTR_RO(audio_input_channels);
+static CLASS_ATTR_RO(audio_output_channels);
+static CLASS_ATTR_RO(audio_format);
+static CLASS_ATTR_RO(platform_type);
+
+static struct attribute *audio_rtdm_class_attrs[] = {
+	&class_attr_audio_buffer_size.attr,
+	&class_attr_audio_hat.attr,
+	&class_attr_audio_sampling_rate.attr,
+	&class_attr_audio_rtdm_ver_maj.attr,
+	&class_attr_audio_rtdm_ver_min.attr,
+	&class_attr_audio_rtdm_ver_rev.attr,
+	&class_attr_audio_input_channels.attr,
+	&class_attr_audio_output_channels.attr,
+	&class_attr_audio_format.attr,
+	&class_attr_platform_type.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(audio_rtdm_class);
+
+struct class audio_rtdm_class = {
+    .name = "audio_rtdm",
+    .class_groups = audio_rtdm_class_groups,
 };
 
 static int audio_driver_open(struct rtdm_fd *fd, int oflags)
@@ -83,7 +171,10 @@ static int audio_driver_open(struct rtdm_fd *fd, int oflags)
 	dev_context->i2s_dev = bcm2835_get_i2s_dev();
 	dev_context->i2s_dev->wait_flag = 0;
 	dev_context->user_proc_calls = 0;
+	dev_context->i2s_dev->kinterrupts = 0;
+	dev_context->i2s_dev->buffer_idx = 0;
 	rtdm_event_init(&dev_context->i2s_dev->irq_event, 0);
+	bcm2835_i2s_buffers_setup(audio_buffer_size, audio_output_channels);
 	return 0;
 }
 
@@ -103,6 +194,7 @@ static void audio_driver_close(struct rtdm_fd *fd)
 		}
 		dev_context->i2s_dev->wait_flag = 0;
 	}
+	bcm2835_i2s_exit();
 }
 
 static int audio_driver_mmap_nrt(struct rtdm_fd *fd, struct vm_area_struct *vma)
@@ -142,13 +234,13 @@ static int audio_driver_ioctl_rt(struct rtdm_fd *fd, unsigned int request,
 
 	case AUDIO_PROC_START:
 	{
-		dev->wait_flag = 1;
+		bcm2835_i2s_start_stop(dev, BCM2835_I2S_START_CMD);
 		return 0;
 	}
 
 	case AUDIO_PROC_STOP:
 	{
-		dev->wait_flag = 0;
+		bcm2835_i2s_start_stop(dev, BCM2835_I2S_STOP_CMD);
 		return 0;
 	}
 
@@ -192,11 +284,15 @@ int audio_rtdm_init(void)
 {
 	int ret, num_codec_channels = DEFAULT_AUDIO_NUM_CODEC_CHANNELS;
 
+	ret = class_register(&audio_rtdm_class);
+	if (ret < 0)
+		return ret;
+
 	if (!realtime_core_enabled()) {
 		printk(KERN_ERR "audio_rtdm: rt core not enabled\n");
 		return -ENODEV;
 	}
-	msleep(100);
+
 	if (!strcmp(audio_hat, "hifi-berry")) {
 		printk(KERN_INFO "audio_rtdm: hifi-berry hat\n");
 		if (pcm5122_codec_init(HIFI_BERRY_DAC_MODE,
@@ -241,8 +337,8 @@ int audio_rtdm_init(void)
 	} else {
 		printk(KERN_ERR "audio_rtdm: Unsupported hat\n");
 	}
-	msleep(100);
-	if (bcm2835_i2s_init(audio_buffer_size, num_codec_channels, audio_hat)) {
+
+	if (bcm2835_i2s_init(audio_hat)) {
 		printk(KERN_ERR "audio_rtdm: i2s init failed\n");
 		return -1;
 	}
@@ -265,7 +361,7 @@ void audio_rtdm_exit(void)
 	} else if (!strcmp(audio_hat, "elk-pi")) {
 		pcm3168a_codec_exit();
 	}
-	bcm2835_i2s_exit();
+	class_unregister(&audio_rtdm_class);
 	rtdm_dev_unregister(&rtdm_audio_device);
 }
 
