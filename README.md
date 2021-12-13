@@ -49,4 +49,4 @@ If the modules are installed already as part of the Kernel you can just do inste
 ```
 
 ---
-Copyright 2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
+Copyright 2021 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
