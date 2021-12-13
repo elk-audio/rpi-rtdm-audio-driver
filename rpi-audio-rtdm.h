@@ -13,7 +13,7 @@
 #define DEVICE_NAME		"audio_rtdm"
 #define RTAUDIO_PROFILE_VER	1
 #define AUDIO_RTDM_VERSION_MAJ	0
-#define AUDIO_RTDM_VERSION_MIN	2
+#define AUDIO_RTDM_VERSION_MIN	3
 #define AUDIO_RTDM_VERSION_VER	0
 
 #define AUDIO_IOC_MAGIC		'r'
@@ -34,6 +34,12 @@ enum codec_sample_format {
 	INT24_I2S,
 	INT24_RJ,
 	INT32_RJ
+};
+
+enum platform_type {
+	NATIVE_AUDIO = 1,
+	SYNC_WITH_UC_AUDIO,
+	ASYNC_WITH_UC_AUDIO,
 };
 
 struct audio_rtdm_buffers {

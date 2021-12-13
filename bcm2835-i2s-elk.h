@@ -11,8 +11,6 @@
 #include <linux/err.h>
 #include <linux/sizes.h>
 
-#include "audio-rtdm.h"
-
 #define BCM2835_I2S_IRQ_NUM 85
 
 #define BCM2835_I2S_PERIPHERAL_BASE	0x20203000
@@ -121,9 +119,10 @@ static inline void rpi_reg_read(void *base_addr, uint32_t reg_addr,
 	*value = *reg;
 }
 
-extern int bcm2835_i2s_init(int audio_buffer_size,
-			int audio_channels, char *audio_hat);
+extern int bcm2835_i2s_init(char *audio_hat);
 extern int bcm2835_i2s_exit(void);
 extern struct audio_rtdm_dev *bcm2835_get_i2s_dev(void);
+extern int bcm2835_i2s_buffers_setup(int audio_buffer_size, int audio_channels);
+extern void bcm2835_i2s_start_stop(struct audio_rtdm_dev *audio_dev, int cmd);
 
 #endif

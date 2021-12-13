@@ -208,6 +208,9 @@
 #define PCM512x_AUPR_SHIFT 0
 #define PCM512x_AUPL_SHIFT 4
 
+/* Page 0, Register 43 - Digital Filter */
+#define PCM512x_LOW_LATENCY_IIR 0x02
+
 /* Page 0, Register 59 - auto mute */
 #define PCM512x_ATMR_SHIFT 0
 #define PCM512x_ATML_SHIFT 4
@@ -255,7 +258,8 @@
 #define PCM512x_AGBL_SHIFT 4
 
 
-extern int pcm5122_codec_init(int mode, int sampling_freq);
+extern int pcm5122_codec_init(int mode, int sampling_freq,
+                                bool enable_low_latency);
 extern void pcm5122_codec_exit(void);
 
 #endif
